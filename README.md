@@ -1,5 +1,3 @@
-
-#.
 # SLICEM
 
 Algorithm that takes 2D projection images from cryo-EM data of multiple macromolecular assemblies and separates them into homogenous groups
