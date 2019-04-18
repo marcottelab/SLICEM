@@ -6,6 +6,4 @@ code is currently in notebook form SLICEM.ipynb
 
 input is zero-mean normalized 2D class averages as .mrcs and the accompanying particle.star 
 
-output is new particle.star file for each cluster of particles
-
-test edit2
+output is new particle.star file for each cluster of particles to be used for 3D reconstruction
