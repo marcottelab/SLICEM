@@ -8,4 +8,4 @@ input is zero-mean normalized 2D class averages as .mrcs and the accompanying pa
 
 output is new particle.star file for each cluster of particles
 
-test edit
+test edit2
