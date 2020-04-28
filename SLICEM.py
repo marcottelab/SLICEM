@@ -498,7 +498,7 @@ def write_scores(projection_knn, complete_scores, outpath, description):
         f.write('projection_1' + '\t' +'angle_1' + '\t' + 'projection_2' + '\t' + 'angle_2' + '\t' + 'edge_score' + '\n')
         for projection, neighbors in projection_knn.items():
             for n in neighbors:
-                f.write(str(projection)+'\t'+str(n[1])+'\t'+str(n[0])+'\t'+str(n[2])+'\t'+str(n[3])+'\n')
+                f.write(str(projection)+'\t'+str(n[1])+'\t'+str(n[0])+'\t'+str(n[2])+'\t'+str(abs(n[3]))+'\n')
 
     with open(outpath+'/complete_scores_{0}.txt'.format(description), 'w') as f:
         f.write('projection_1' + '\t' + 'angle_1' + '\t' +'projection_2' + '\t' + 'angle_2' + '\t' + 'score' + '\n')
