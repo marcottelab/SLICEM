@@ -2,25 +2,20 @@ import time
 import mrcfile
 import argparse
 import numpy as np
-import pandas as pd
 import skimage as ski
 import itertools as it
 import multiprocessing 
-from igraph import Graph
 from scipy import ndimage as ndi
 from scipy import spatial, signal, stats
 
 def main():
     """
     calculates similarity between line projections from 2D class averages
-    returns star files from clusters in a graph containing similar 2D classes
     """
     parser = argparse.ArgumentParser(description='compare and cluster 2D class averages based on common lines')
     
     parser.add_argument('-i', '--input', action='store', dest='mrc_input', required=True,
                         help='path to mrcs file of 2D class averages')
-    parser.add_argument('-s', '--star_input', action='store', dest='star_input', required=True,
-                        help='path to star file for particles in 2D class averages (uses RELION conventions)')
     parser.add_argument('-o', '--outpath', action='store', dest='outpath', required=True,
                         help='path for output files')
     parser.add_argument('-d', '--description', action='store', dest='description', required=True,
@@ -31,10 +26,6 @@ def main():
                         help='zscore normalize 1D projections before scoring (not recommended)')
     parser.add_argument('-p', '--pixel_size', action='store', dest='pixel_size', type=int, required=True,
                         help='pixel size of 2D class averages in A/pixel')
-    parser.add_argument('-k', '--neighbors', action='store', dest='neighbors', type=int, default=5, required=False,
-                        help='number of edges for each node in the graph')
-    parser.add_argument('-g', '--community_detection', action='store', dest='community_detection', required=True,
-                        help='community detection algorithm to use (betweenness, walktrap)')
     parser.add_argument('-c', '--num_workers', action='store', dest='num_workers', type=int, required=False, default=1,
                         help='number of CPUs to use')
 
@@ -73,26 +64,10 @@ def main():
     complete_scores = optimum_scores(score_matrix, 
                                      metric=args.metric)
 
-    projection_knn = nearest_neighbors(complete_scores,
-                                       num_class_avg,
-                                       neighbors=args.neighbors,
-                                       metric=args.metric)
-
-    clusters = detect_communities(projection_knn, 
-                                  community_detection=args.community_detection)
-
-    remove_outliers(clusters, projection_2D)
-
-    write_scores(projection_knn,
-                 complete_scores,
+    write_scores(complete_scores,
                  outpath=args.outpath, 
                  description=args.description)
 
-    write_star_files(clusters,
-                     star_input=args.star_input, 
-                     outpath=args.outpath, 
-                     description=args.description)
-    
     print('That took: {} minutes'.format((time.time() - starttime)/60))
 
     
@@ -110,10 +85,6 @@ class Projection:
     def size(self):
         l = len(self.vector)
         return(l)
-    
-    @property
-    def dimension(self):
-        return self.vector.ndim
 
     
 def get_1D_projections(mrcs, pixel_size, norm):
@@ -140,8 +111,8 @@ def get_1D_projections(mrcs, pixel_size, norm):
             proj_1D = ski.transform.rotate(avg, a, resize=True).sum(axis=0)
             trim_1D = np.trim_zeros(proj_1D, trim='fb')
             projection_1D[(k, a)] = Projection(class_avg = k,
-                                                   angle = a,
-                                                   vector = trim_1D)
+                                               angle = a,
+                                               vector = trim_1D)
 
     if norm:
         for p, v in projection_1D.items():
@@ -369,230 +340,18 @@ def optimum_scores(score_matrix, metric):
             complete_score_matrix[(pair[1], pair[0])] = (angle_2, angle_1, score)
         
     return complete_score_matrix
-
-
-def nearest_neighbors(complete_scores, num_class_avg, neighbors, metric):
-    """
-    group k best scores for each class average to construct graph 
-    """
-    order_scores = {avg: [] for avg in range(num_class_avg)}
-    
-    projection_knn = {}
-
-    #reorganize score matrix to sort for nearest neighbors
-    #projection_knn[projection_1] = [projection_2, angle_1, angle_2, score]
-    for pair, values in complete_scores.items():
-        p1 = pair[0]
-        p2 = pair[1]
-        a1 = values[0]
-        a2 = values[1]
-        s = values[2]
-        
-        #option: convert distance to similarity
-        #if metric != 'cross-correlation':
-        #    s = 1/(1 + values[2])
-        #else:
-        #    s = values[2]
-            
-        c = [p2, a1, a2, s]
-        order_scores[p1].append(c)
-        
-    #zscore scores by each projection, use as edgeweight in graph
-    for projection, scores in order_scores.items():
-        all_scores = []
-        for v in scores:
-            all_scores.append(v[3])
-        
-        u = np.mean(all_scores)
-        s = np.std(all_scores)
-    
-        for v in scores:
-            zscore = (v[3] - u)/s
-            v[3] = zscore
-
-    for avg, scores in order_scores.items():
-        if metric != 'cross-correlation':
-            sort = sorted(scores, reverse=False, key=lambda x: x[3])[:neighbors]
-        else:
-            sort = sorted(scores, reverse=True, key=lambda x: x[3])[:neighbors]
-        projection_knn[avg] = sort
-        
-    return projection_knn
-
-
-def detect_communities(projection_knn, community_detection):
-    """
-    cluster graph using walktrap of edge betweeness
-    """
-    flat = []
-    
-    clusters = {}
-
-    for projection, knn in projection_knn.items():
-        for n in knn:
-            #(proj_1, proj_2, score)
-            #abs score to correct for distance vs similarity
-            flat.append((projection, n[0], abs(n[3])))
-
-    g = Graph.TupleList(flat, weights=True)
-
-    if community_detection == 'walktrap':
-        wt = Graph.community_walktrap(g, weights='weight', steps=4)
-        cluster_dendrogram = wt.as_clustering()
-    elif community_detection == 'betweenness':
-        ebs = Graph.community_edge_betweenness(g, weights='weight', directed=True)
-        cluster_dendrogram = ebs.as_clustering()
-
-    for community, projection in enumerate(cluster_dendrogram.subgraphs()):
-        clusters[community] = projection.vs['name']
-
-    #convert node IDs back to ints
-    for cluster, nodes in clusters.items():
-        clusters[cluster] = [int(node) for node in nodes]
-        
-    return clusters
-
-
-def remove_outliers(clusters, projection_2D):
-    """
-    use median absolute deviation of summed 2D projections to remove outliers
-    inspect outliers for further processing
-    """
-    pixel_sums = {}
-    
-    outliers = []
-
-    for cluster, nodes in clusters.items():
-        pixel_sums[cluster] = []
-        for node in nodes:
-            pixel_sums[cluster].append(sum(sum(projection_2D[node])))
-
-    for cluster, psums in pixel_sums.items():
-        med = np.median(psums)
-        m_psums = [abs(x - med) for x in psums]
-        mad = np.median(m_psums)
-
-        for i, proj in enumerate(psums):
-            #Boris Iglewicz and David Hoaglin (1993)
-            z = 0.6745*(proj - med)/mad
-            if abs(z) > 3.5:
-                outliers.append((cluster, clusters[cluster][i]))
-
-    clusters["outliers"] = [o[1] for o in outliers]
-    
-    for outlier in outliers:
-        cluster = outlier[0]
-        node = outlier[1]
-        clusters[cluster].remove(node)
-        print('class_avg node {0} was removed from cluster {1} as an outlier'.format(node, cluster))
         
         
-def write_scores(projection_knn, complete_scores, outpath, description):
+def write_scores(complete_scores, outpath, description):
     """
-    tab separted text file of nearest neighbors 
-    and complete score matrix
-    neighbors file can be input to cytoscape
+    tab separted text file of complete score matrix
+    to load into the slicem gui
     """
-    #tab separated: projection_1, angle_1, projection_2, angle_2, score    
-    with open(outpath+'/neighbors_{0}.txt'.format(description), 'w') as f:
-        f.write('projection_1' + '\t' +'angle_1' + '\t' + 'projection_2' + '\t' + 'angle_2' + '\t' + 'edge_score' + '\n')
-        for projection, neighbors in projection_knn.items():
-            for n in neighbors:
-                f.write(str(projection)+'\t'+str(n[1])+'\t'+str(n[0])+'\t'+str(n[2])+'\t'+str(abs(n[3]))+'\n')
-
-    with open(outpath+'/complete_scores_{0}.txt'.format(description), 'w') as f:
+    with open(outpath+'/slicem_scores_{0}.txt'.format(description), 'w') as f:
         f.write('projection_1' + '\t' + 'angle_1' + '\t' +'projection_2' + '\t' + 'angle_2' + '\t' + 'score' + '\n')
         for p, v in complete_scores.items():
             f.write(str(p[0])+'\t'+str(v[0])+'\t'+str(p[1])+'\t'+str(v[1])+'\t'+str(v[2])+'\n')
             
-
-def parse_star(f):
-    """
-    functions to parse star file adapted from Tristan Bepler
-    https://github.com/tbepler/topaz
-    https://www.nature.com/articles/s41592-019-0575-8
-    """
-    return parse(f)
-
-def parse(f):
-    lines = f.readlines()
-    for i in range(len(lines)):
-        line = lines[i]
-        if line.startswith('data_'): 
-            return parse_star_body(lines[i+1:])
-        
-def parse_star_body(lines):
-    #data_images line has been read, next is loop
-    for i in range(len(lines)):
-        if lines[i].startswith('loop_'):
-            lines = lines[i+1:]
-            break
-    header,lines = parse_star_loop(lines)
-    #parse the body
-    content = []
-    for i in range(len(lines)):
-        line = lines[i].strip()
-        if line.startswith('data'): # done with image block
-            break
-        if line.startswith('#') or line.startswith(';'): # comment lines
-            continue
-        if line != '':
-            tokens = line.split()
-            content.append(tokens)
-            
-    table = pd.DataFrame(content, columns=header)
-    
-    return table      
-    
-def parse_star_loop(lines):
-    columns = []
-    for i in range(len(lines)):
-        line = lines[i].strip()
-        if not line.startswith('_'):
-            break
-        name = line[1:]
-        #strip trailing comments from name
-        loc = name.find('#')
-        if loc >= 0:
-            name = name[:loc]
-        #strip 'rln' prefix
-        if name.startswith('rln'):
-            name = name[3:]
-        name = name.strip()
-        
-        columns.append(name)
-        
-    return columns, lines[i:]
-
-
-def write_star_files(clusters, star_input, outpath, description):
-    """
-    split star file into new star files based on clusters
-    """
-    with open(star_input, 'r') as f:
-        table = parse_star(f)
-
-    cluster_star = {}
-
-    for cluster, nodes in clusters.items():
-        #convert to str to match df
-        #add 1 to match RELION indexing
-        avgs = [str(node+1) for node in nodes]
-        subset = table[table['ClassNumber'].isin(avgs)]
-        cluster_star[cluster] = subset
-
-    for cluster, table in cluster_star.items():
-        with open(outpath+'/{0}_cluster_{1}.star'.format(description, cluster), 'w') as f:
-            #write the star file
-            print('data_', file=f)
-            print('loop_', file=f)
-            for i, name in enumerate(table.columns):
-                print('_rln' + name + ' #' + str(i+1), file=f)
-            table.to_csv(f, sep='\t', index=False, header=False)
-            
-    with open(outpath+'/{0}_clusters.txt'.format(description), 'w') as f:
-        for cluster, averages in clusters.items():
-            f.write(str(cluster) + '\t' + str(averages) + '\n')
             
 if __name__ == "__main__":
     main()
