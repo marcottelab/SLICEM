@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import skimage as ski
 import networkx as nx
-
 from igraph import Graph
 from scipy import ndimage as ndi
 from scipy import spatial, signal, stats
@@ -493,8 +492,6 @@ class SLICEM_GUI(tk.Tk):
                                node_size=300, alpha=0.65, node_color=colors)
         nx.draw_networkx_edges(G, positions, ax=a, width=1, edge_color='grey')
         nx.draw_networkx_labels(G, positions, ax=a, font_weight='bold', font_size=10)
-        nx.nodes
-
         
         if self.netcanvas:
             self.netcanvas.get_tk_widget().destroy()
