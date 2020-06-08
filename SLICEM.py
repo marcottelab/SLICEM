@@ -24,7 +24,7 @@ def main():
                         help='choose scoring method (Euclidean, L1, cross-correlation, cosine)')
     parser.add_argument('-n', '--normalize', action='store_true', required=False,
                         help='zscore normalize 1D projections before scoring (not recommended)')
-    parser.add_argument('-p', '--pixel_size', action='store', dest='pixel_size', type=int, required=True,
+    parser.add_argument('-p', '--pixel_size', action='store', dest='pixel_size', type=float, required=True,
                         help='pixel size of 2D class averages in A/pixel')
     parser.add_argument('-c', '--num_workers', action='store', dest='num_workers', type=int, required=False, default=1,
                         help='number of CPUs to use')
