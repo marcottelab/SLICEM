@@ -1,0 +1,8 @@
+mrcfile
+numpy 
+scikit-image
+scipy
+pandas
+networkx
+python-igraph
+matplotlib
