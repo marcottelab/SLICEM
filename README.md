@@ -44,7 +44,8 @@ example: python SLICEM.py -i path/to/input.mrc -o path/to/output/ -d mixture -m 
 ```
 
 <br/>
-Next load the scores and class averages into the GUI for clustering. See **slicem_manual.pdf** for more details
+Next load the scores and class averages into the GUI for clustering. See slicem_manual.pdf for more details
+
 ```
 python SLICEM_GUI.py
 ```
