@@ -1,12 +1,10 @@
 # SLICEM
----
 Compare and cluster 2D class averages of multiple distinct structures from cryo-EM data based on common lines.  
 Example mrcs and star file provided in /data, corresponding cryo-EM data at EMPIAR-10268.  
 See **slicem_manual.pdf** for a brief tutorial.
 
 
 # Installation
----
 Download the software and create a conda environment -
 ```
 git clone https://github.com/marcottelab/SLICEM.git
@@ -16,7 +14,6 @@ source deactivate #to return to base env
 ```
 
 # Usage
----
 First generate a score file using SLICEM.py
 ```
 usage: SLICEM.py [-h] -i MRC_INPUT -o OUTPATH -d DESCRIPTION -m METRIC [-n] -p
@@ -56,34 +53,33 @@ python SLICEM_GUI.py
 
 <br/><br/>
 ## Introduction
----
 
 <img align="left" width="800" src="https://github.com/EricVerbeke/EricVerbeke.github.io/blob/master/media/Intro.gif?raw=true" />
 
 <br clear="left"/><br/>
 
----
+
 ## Line projections
 
 <img align="left" width="800" src="https://github.com/EricVerbeke/EricVerbeke.github.io/blob/master/media/Proteasome.gif?raw=true"  />
 
 <br clear="left"/><br/>
 
----
+
 ## Comparison of line projections
 
 <img align="left" width="800" src="https://github.com/EricVerbeke/EricVerbeke.github.io/blob/master/media/ProtRibo.gif?raw=true" />
 
 <br clear="left"/><br/>
 
----
+
 ## Clustering
 
 <img align="left" width="800" src="https://github.com/EricVerbeke/EricVerbeke.github.io/blob/master/media/Graph.gif?raw=true"  />
 
 <br clear="left"/><br/>
 
----
+
 
 ## Reference 
 **Separating distinct structures of multiple macromolecular assemblies from cryo-EM projections**
