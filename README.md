@@ -63,8 +63,9 @@ python SLICEM_GUI.py
 
 ---
 
-<br/>  
-## Introduction  
+<br/>
+
+## Introduction
 
 <img align="left" width="800" src="https://github.com/EricVerbeke/EricVerbeke.github.io/blob/master/media/Intro.gif?raw=true" />
 
