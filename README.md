@@ -3,7 +3,7 @@ Compare and cluster 2D class averages of multiple distinct structures from cryo-
 Example mrcs and star file provided in /data, corresponding cryo-EM data at EMPIAR-10268.  
 See **slicem_manual.pdf** for a brief tutorial.
 
-# new in 2020_Nov_6 update
+# New in 2020_Nov_6 update
 - Fixed memory error with multiprocessing  
 - Added option to downscale class averages `-s` (--> faster processing)  
 - Removed support for normalization and cross-correlation  
@@ -25,7 +25,7 @@ source deactivate #to return to base env
 # Usage
 First generate a score file using SLICEM.py
 ```
-usage: slicem_v3.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine}] -p
+usage: SLICEM.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine}] -p
                     PIXEL_SIZE [-s SCALE_FACTOR] [-c NUM_WORKERS]
 
 compare similarity of 2D class averages based on common lines
