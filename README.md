@@ -3,23 +3,32 @@ Compare and cluster 2D class averages of multiple distinct structures from cryo-
 Example mrcs and star file provided in /data, corresponding cryo-EM data at EMPIAR-10268.  
 See **slicem_manual.pdf** for a brief tutorial.
 
+# new in 2020_Nov_6 update
+- Fixed memory error with multiprocessing  
+- Added option to downscale class averages `-s` (--> faster processing)  
+- Removed support for normalization and cross-correlation  
+- Removed Jupyter Notebook (out of date)  
+***upcoming updates***
+- GPU support
+- Faster, more accurate comparison of line projections
+- Improved GUI
 
 # Installation
 Download the software and create a conda environment -
 ```
 git clone https://github.com/marcottelab/SLICEM.git
 conda env create -f environment.yml
-source activate slicem 
+source activate SLICEM 
 source deactivate #to return to base env
 ```
 
 # Usage
 First generate a score file using SLICEM.py
 ```
-usage: SLICEM.py [-h] -i MRC_INPUT -o OUTPATH -d DESCRIPTION -m METRIC [-n] -p
-                 PIXEL_SIZE [-c NUM_WORKERS]
+usage: slicem_v3.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine}] -p
+                    PIXEL_SIZE [-s SCALE_FACTOR] [-c NUM_WORKERS]
 
-compare and cluster 2D class averages based on common lines
+compare similarity of 2D class averages based on common lines
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -27,20 +36,22 @@ optional arguments:
                         path to mrcs file of 2D class averages
   -o OUTPATH, --outpath OUTPATH
                         path for output files
-  -d DESCRIPTION, --description DESCRIPTION
-                        name for output file
-  -m METRIC, --metric METRIC
-                        choose scoring method (Euclidean, L1, cross-
-                        correlation, cosine)
-  -n, --normalize       zscore normalize 1D projections before scoring (not
-                        recommended)
+  -m {Euclidean,L1,cosine}, --metric {Euclidean,L1,cosine}
+                        choose scoring method, Euclidean default
   -p PIXEL_SIZE, --pixel_size PIXEL_SIZE
                         pixel size of 2D class averages in A/pixel
+  -s SCALE_FACTOR, --scale_factor SCALE_FACTOR
+                        scale factor for downsampling. (e.g. -s 2 converts 100pix box --> 50pix box)
   -c NUM_WORKERS, --num_workers NUM_WORKERS
                         number of CPUs to use
 ```
+**command line example**
 ```
-example: python SLICEM.py -i path/to/input.mrc -o path/to/output/ -d mixture -m Euclidean -p 1 -c 8
+(SLICEM): python SLICEM.py -i path/to/input.mrc -o path/to/output/ -p 1 -s 4 -c 8
+```
+alternative example if running remotely
+```
+(SLICEM): nohup python SLICEM.py -i path/to/input.mrc -o path/to/output/ -p 1 -s 4 -c 8 > log.txt &
 ```
 
 <br/>
