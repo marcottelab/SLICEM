@@ -1,74 +1,88 @@
+import os
 import time
 import mrcfile
 import argparse
 import numpy as np
 import skimage as ski
-import itertools as it
-import multiprocessing 
+import multiprocessing
+from scipy import spatial
 from scipy import ndimage as ndi
-from scipy import spatial, signal, stats
+
+ROTATION_DEGREES = np.arange(0, 360, 5)
 
 def main():
     """
     calculates similarity between line projections from 2D class averages
     """
-    parser = argparse.ArgumentParser(description='compare and cluster 2D class averages based on common lines')
+    parser = argparse.ArgumentParser(description='compare similarity of 2D class averages based on common lines')
     
     parser.add_argument('-i', '--input', action='store', dest='mrc_input', required=True,
                         help='path to mrcs file of 2D class averages')
+    
     parser.add_argument('-o', '--outpath', action='store', dest='outpath', required=True,
                         help='path for output files')
-    parser.add_argument('-d', '--description', action='store', dest='description', required=True,
-                        help='name for output file')
-    parser.add_argument('-m', '--metric', action='store', dest='metric', required=True,
-                        help='choose scoring method (Euclidean, L1, cross-correlation, cosine)')
-    parser.add_argument('-n', '--normalize', action='store_true', required=False,
-                        help='zscore normalize 1D projections before scoring (not recommended)')
+    
+    parser.add_argument('-m', '--metric', action='store', dest='metric', required=False, default='Euclidean',
+                        choices=['Euclidean', 'L1', 'cosine'],
+                        help='choose scoring method, Euclidean default')
+    
     parser.add_argument('-p', '--pixel_size', action='store', dest='pixel_size', type=float, required=True,
                         help='pixel size of 2D class averages in A/pixel')
+    
+    parser.add_argument('-s', '--scale_factor', action='store', dest='scale_factor', type=float, required=False, default=1,
+                        help='scale factor for downsampling. (e.g. -s 2 converts 100pix box --> 50pix box)')
+    
     parser.add_argument('-c', '--num_workers', action='store', dest='num_workers', type=int, required=False, default=1,
                         help='number of CPUs to use')
 
     args = parser.parse_args()
 
-    starttime = time.time()
+    final_scores = {}
     
-    projection_2D, projection_1D = get_1D_projections(mrcs=args.mrc_input,
-                                                      pixel_size=args.pixel_size,
-                                                      norm=args.normalize)
-                                                      
+    projection_2D = get_projection_2D(mrcs=args.mrc_input,
+                                      pixel_size=args.pixel_size,
+                                      factor=args.scale_factor)
+      
     num_class_avg = len(projection_2D)
-
-    n = len(projection_1D)
+    num_1D = num_class_avg*len(ROTATION_DEGREES)
     
     print("number of 2D class averages: {}".format(num_class_avg))
-    print("number of 1D projection vectors: {}".format(n))
-    print("total number of pairwise scores: {}".format(int(n*(n-1)/2)))
+    print("number of 1D projection vectors: {}".format(num_1D))
+    print("total number of pairwise scores: {}".format(int(num_1D*(num_1D-1)/2)))
 
-    #remove pairs from same 2D class average
-    all_pairs = list(it.combinations(projection_1D.values(), 2))
-    projection_pairs = [pair for pair in all_pairs if pair[0].class_avg != pair[1].class_avg]
+    if args.metric == 'Euclidean':
+        pairwise_score = pairwise_l2
+    elif args.metric == 'L1':
+        pairwise_score = pairwise_l1
+    elif args.metric == 'cosine':
+        pairwise_score = pairwise_cosine
     
-    scores = multiproc_pairwise(projection_pairs,
-                                num_workers=args.num_workers,
-                                metric=args.metric)
+    for i in range(num_class_avg-1):
+        line_projections_1 = vectorize(i, projection_2D[i])
+        for j in range(i+1, num_class_avg):
+            line_projections_2 = vectorize(j, projection_2D[j])
 
-    pairs = list(it.combinations(list(range(num_class_avg)), 2))
+            projection_pairs = []
+            for line_1 in line_projections_1.values():
+                for line_2 in line_projections_2.values():
+                    projection_pairs.append((line_1, line_2))
 
-    score_matrix = {pair: [] for pair in pairs}
+            with multiprocessing.Pool(args.num_workers) as pool:
+                pair_scores = pool.starmap(
+                    wrapper_function, 
+                    [(pair, slide_score, pairwise_score) for pair in projection_pairs]
+                )
 
-    for s in scores:
-        #format is [projection_1, projection_2] = [(angle_1, angle_2, score)]
-        score_matrix[s[0], s[2]].append((s[1], s[3], s[4]))
-
-    complete_scores = optimum_scores(score_matrix, 
-                                     metric=args.metric)
-
-    write_scores(complete_scores,
-                 outpath=args.outpath, 
-                 description=args.description)
-
-    print('That took: {} minutes'.format((time.time() - starttime)/60))
+            optimum =  min(pair_scores, key = lambda x: x[4])
+            avg_1 = optimum[0]
+            deg_1 = optimum[1]
+            avg_2 = optimum[2]
+            deg_2 = optimum[3]
+            score = optimum[4]
+            final_scores[(avg_1, avg_2)] = (deg_1, deg_2, score)
+            final_scores[(avg_2, avg_1)] = (deg_2, deg_1, score)
+    
+    write_scores(final_scores, outpath=args.outpath)
 
     
 class Projection:
@@ -87,48 +101,38 @@ class Projection:
         return(l)
 
     
-def get_1D_projections(mrcs, pixel_size, norm):
+def get_projection_2D(mrcs, pixel_size, factor):
     """
-    creates dictionary of 1D projections, key is [class avg number, projection angle] 
+    read, scale and extract class averages 
     """
     projection_2D = {}
-    
-    projection_1D = {}
-    
-    angles = np.arange(0, 360, 5)
-    
+
     with mrcfile.open(mrcs) as mrc:
         for i, data in enumerate(mrc.data):
-            projection_2D[i] = data.astype('float64')
-            
-    for k, avg in projection_2D.items():
-        projection_2D[k] = extract_class_avg(avg, pixel_size)
-    
-    for k, avg in projection_2D.items():
-        for a in angles:
-            #to recreate original version, don't resize or trim avgs
-            #make 1D projections as in Radon transform
-            proj_1D = ski.transform.rotate(avg, a, resize=True).sum(axis=0)
-            trim_1D = np.trim_zeros(proj_1D, trim='fb')
-            projection_1D[(k, a)] = Projection(class_avg = k,
-                                               angle = a,
-                                               vector = trim_1D)
+            projection_2D[i] = data
+        mrc.close()
 
-    if norm:
-        for p, v in projection_1D.items():
-            projection_1D[p].vector = stats.zscore(projection_1D[p].vector)
-    
-    return projection_2D, projection_1D  
+    for k, avg in projection_2D.items():
+        if factor == 1:
+            projection_2D[k] = extract_class_avg(avg, pixel_size)
+        else:
+            scaled_img = ski.transform.rescale(avg, 
+                                               scale=(1/factor), 
+                                               anti_aliasing=True, 
+                                               multichannel=False, #add to supress warning
+                                               mode='constant') #add to supress warning
+            projection_2D[k] = extract_class_avg(scaled_img, pixel_size*factor)
+            
+    return projection_2D
 
 
 def extract_class_avg(avg, pixel_size):
     """
     keep positive values from normalized class average
-    and remove extra densities in class average
+    remove extra densities in class average
     fit in minimal bounding box
     """
-    #EV: could try different region extraction or masking
-    pos_img = avg
+    pos_img = avg.copy()
     pos_img[pos_img < 0] = 0
     
     #dilate by pixel size to connect neighbor regions
@@ -210,22 +214,32 @@ def extract_class_avg(avg, pixel_size):
     return new_region
 
 
+def vectorize(key, image):
+    """
+    takes image and creates 1D projections
+    similar to Radon transform
+    """
+    projection_1D = {}
+    for degree in ROTATION_DEGREES:
+        proj_1D = ski.transform.rotate(image, degree, resize=True).sum(axis=0)
+        trim_1D = np.trim_zeros(proj_1D, trim='fb').astype('float32')
+        projection_1D[(key, degree)] = Projection(class_avg=key, angle=degree, vector=trim_1D)
+    return projection_1D
+
+
 def pairwise_l2(a, b):
     score = spatial.distance.euclidean(a.vector, b.vector)
     return score
+
 
 def pairwise_l1(a, b):
     score = sum(abs(a.vector - b.vector))
     return score
 
+
 def pairwise_cosie(a, b):
     score = spatial.distance.cosine(a.vector - b.vector)
     return score 
-
-def pairwise_xcorr(a, b):
-    score = signal.correlate(a.vector, b.vector, mode='valid')
-    score_max = np.amax(score)
-    return score_max
 
 
 def slide_score(a, b, pairwise_score):
@@ -265,23 +279,10 @@ def slide_score(a, b, pairwise_score):
     return score
 
 
-def wrapper_xcorr(pair, pairwise):
-    """
-    - pair is tuple of instances from Projection class
-    - func is how to pairwise score vectors defined from user
-    """
-    score = pairwise(pair[0], pair[1])
-    
-    return [pair[0].class_avg, 
-            pair[0].angle, 
-            pair[1].class_avg, 
-            pair[1].angle,
-            score]
-
-
 def wrapper_function(pair, slide, pairwise):
     """
-    - same as above but passes pairwise_score to slide_score
+    - pair is tuple from Projection class to be scored
+    - pairwise is function to score vectores (e.g. Euclidean)
     """
     score = slide(pair[0], pair[1], pairwise)
 
@@ -291,67 +292,25 @@ def wrapper_function(pair, slide, pairwise):
             pair[1].angle,
             score]
 
-
-def multiproc_pairwise(projection_pairs, num_workers, metric):
+                
+def write_scores(final_scores, outpath):
     """
+    tab separted file of final scores
+    load scores into the slicem gui
     """
-    with multiprocessing.Pool(num_workers) as pool:
-        if metric == 'Euclidean':
-            pair_scores = pool.starmap(wrapper_function, 
-                                       [(pair, slide_score, pairwise_l2) for pair in projection_pairs])
-        elif metric == 'L1':
-            pair_scores = pool.starmap(wrapper_function, 
-                                       [(pair, slide_score, pairwise_l1) for pair in projection_pairs])
-        elif metric == 'cosine':    
-            pair_scores = pool.starmap(wrapper_function, 
-                                       [(pair, slide_score, pairwise_cosine) for pair in projection_pairs])
-        elif metric == 'cross-correlation':
-            pair_scores = pool.starmap(wrapper_xcorr, 
-                                       it.product(projection_pairs, [pairwise_xcorr]))
-    return pair_scores
-
-
-def optimum_scores(score_matrix, metric):
-    """
-    best pairwise score for all 1D projections
-    """
-    optimum_pairwise_scores = {}
+    stamp = time.strftime('%Y%m%d_%H%M%S')
     
-    complete_score_matrix = {}
+    header = ['projection_1', 'degree_1', 'projection_2', 'degree_2', 'score']
+    
+    with open(outpath+'/slicem_scores_{0}.txt'.format(stamp), 'w') as f:
+        for h in header:
+            f.write(h+'\t')
+        f.write('\n')
+        for p, v in final_scores.items():
+            f.write(str(p[0])+'\t'+str(v[0])+'\t'+str(p[1])+'\t'+str(v[1])+'\t'+str(v[2])+'\n')          
 
-    #cross-correlation optimum is max, other metrics are min
-    if metric != 'cross-correlation': 
-        for pair, scores in score_matrix.items():
-            optimum_pairwise_scores[pair] = min(score_matrix[pair], key = lambda x: x[2])
-    else:
-        for pair, scores in score_matrix.items():
-            optimum_pairwise_scores[pair] = max(score_matrix[pair], key = lambda x: x[2])
-
-    #complete the array
-    for pair, value in optimum_pairwise_scores.items():
-        if pair[0] == pair[1]:
-            next
-        else:
-            complete_score_matrix[pair] = value
-            #now flip pair
-            score = value[2]
-            angle_1 = value[0]
-            angle_2 = value[1]
-            complete_score_matrix[(pair[1], pair[0])] = (angle_2, angle_1, score)
-        
-    return complete_score_matrix
-        
-        
-def write_scores(complete_scores, outpath, description):
-    """
-    tab separted text file of complete score matrix
-    to load into the slicem gui
-    """
-    with open(outpath+'/slicem_scores_{0}.txt'.format(description), 'w') as f:
-        f.write('projection_1' + '\t' + 'angle_1' + '\t' +'projection_2' + '\t' + 'angle_2' + '\t' + 'score' + '\n')
-        for p, v in complete_scores.items():
-            f.write(str(p[0])+'\t'+str(v[0])+'\t'+str(p[1])+'\t'+str(v[1])+'\t'+str(v[2])+'\n')
-            
             
 if __name__ == "__main__":
+    starttime = time.time()
     main()
+    print('Runtime: {} minutes'.format((time.time() - starttime)/60))
