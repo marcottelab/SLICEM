@@ -58,7 +58,7 @@ alternative example if running remotely
 Next load the scores and class averages into the GUI for clustering. See slicem_manual.pdf for more details
 
 ```
-python SLICEM_GUI.py
+python slicem_gui.py
 ```
 
 ---
