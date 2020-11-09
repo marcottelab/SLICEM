@@ -4,10 +4,12 @@ import argparse
 import numpy as np
 import skimage as ski
 import multiprocessing
-from scipy import spatial
 from scipy import ndimage as ndi
+from scipy.stats import wasserstein_distance
+from scipy.spatial.distance import euclidean, cosine
 
 ROTATION_DEGREES = np.arange(0, 360, 5)
+SLIDE = ['Euclidean', 'L1', 'cosine'] #metrics that require translation
 
 def main():
     """
@@ -22,7 +24,7 @@ def main():
                         help='path for output files')
     
     parser.add_argument('-m', '--metric', action='store', dest='metric', required=False, default='Euclidean',
-                        choices=['Euclidean', 'L1', 'cosine'],
+                        choices=['Euclidean', 'L1', 'cosine', 'EMD'],
                         help='choose scoring method, Euclidean default')
     
     parser.add_argument('-p', '--pixel_size', action='store', dest='pixel_size', type=float, required=True,
@@ -55,6 +57,13 @@ def main():
         pairwise_score = pairwise_l1
     elif args.metric == 'cosine':
         pairwise_score = pairwise_cosine
+    elif args.metric == 'EMD':
+        pairwise_score = pairwise_wasserstein
+    
+    if args.metric in SLIDE:
+        wrapper_function = wrapper_slide_function
+    else:
+        wrapper_function = wrapper_wasserstein
     
     for i in range(num_class_avg-1):
         line_projections_1 = vectorize(i, projection_2D[i])
@@ -69,15 +78,13 @@ def main():
             with multiprocessing.Pool(args.num_workers) as pool:
                 pair_scores = pool.starmap(
                     wrapper_function, 
-                    [(pair, slide_score, pairwise_score) for pair in projection_pairs]
+                    [(pair, pairwise_score) for pair in projection_pairs]
                 )
 
             optimum =  min(pair_scores, key = lambda x: x[4])
-            avg_1 = optimum[0]
-            deg_1 = optimum[1]
-            avg_2 = optimum[2]
-            deg_2 = optimum[3]
-            score = optimum[4]
+
+            avg_1, deg_1, avg_2, deg_2, score = [val for val in optimum]
+            
             final_scores[(avg_1, avg_2)] = (deg_1, deg_2, score)
             final_scores[(avg_2, avg_1)] = (deg_2, deg_1, score)
     
@@ -227,7 +234,7 @@ def vectorize(key, image):
 
 
 def pairwise_l2(a, b):
-    score = spatial.distance.euclidean(a.vector, b.vector)
+    score = euclidean(a.vector, b.vector)
     return score
 
 
@@ -236,9 +243,14 @@ def pairwise_l1(a, b):
     return score
 
 
-def pairwise_cosie(a, b):
-    score = spatial.distance.cosine(a.vector - b.vector)
+def pairwise_cosine(a, b):
+    score = cosine(a.vector, b.vector)
     return score 
+
+
+def pairwise_wasserstein(a, b):
+    score = wasserstein_distance(a.vector, b.vector)
+    return score
 
 
 def slide_score(a, b, pairwise_score):
@@ -278,13 +290,28 @@ def slide_score(a, b, pairwise_score):
     return score
 
 
-def wrapper_function(pair, slide, pairwise):
+def wrapper_slide_function(pair, pairwise):
     """
     - pair is tuple from Projection class to be scored
     - pairwise is function to score vectores (e.g. Euclidean)
     """
-    score = slide(pair[0], pair[1], pairwise)
+    
+    score = slide_score(pair[0], pair[1], pairwise)
 
+    return [pair[0].class_avg, 
+            pair[0].angle, 
+            pair[1].class_avg, 
+            pair[1].angle,
+            score]
+
+
+def wrapper_wasserstein(pair, pairwise):
+    """
+    same as above but without slide_score
+    """
+    
+    score = pairwise(pair[0], pair[1])
+    
     return [pair[0].class_avg, 
             pair[0].angle, 
             pair[1].class_avg, 
