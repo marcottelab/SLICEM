@@ -6,11 +6,11 @@ See **slicem_manual.pdf** for a brief tutorial.
 # New in 2020_Nov_6 update
 - Fixed memory error with multiprocessing  
 - Added option to downscale class averages `-s` (--> faster processing)  
+- Added Wasserstein (Earth mover) distance
 - Removed support for normalization and cross-correlation  
 - Removed Jupyter Notebook (out of date)  
 ***upcoming updates***
 - GPU support
-- Faster, more accurate comparison of line projections
 - Improved GUI
 
 # Installation
@@ -25,8 +25,8 @@ source deactivate #to return to base env
 # Usage
 First generate a score file using SLICEM.py
 ```
-usage: SLICEM.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine}] -p
-                    PIXEL_SIZE [-s SCALE_FACTOR] [-c NUM_WORKERS]
+usage: slicem.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine,EMD}]
+                 -p PIXEL_SIZE [-s SCALE_FACTOR] [-c NUM_WORKERS]
 
 compare similarity of 2D class averages based on common lines
 
@@ -36,7 +36,7 @@ optional arguments:
                         path to mrcs file of 2D class averages
   -o OUTPATH, --outpath OUTPATH
                         path for output files
-  -m {Euclidean,L1,cosine}, --metric {Euclidean,L1,cosine}
+  -m {Euclidean,L1,cosine,EMD}, --metric {Euclidean,L1,cosine,EMD}
                         choose scoring method, Euclidean default
   -p PIXEL_SIZE, --pixel_size PIXEL_SIZE
                         pixel size of 2D class averages in A/pixel
@@ -47,11 +47,11 @@ optional arguments:
 ```
 **command line example**
 ```
-(SLICEM): python SLICEM.py -i path/to/input.mrc -o path/to/output/ -p 1 -s 4 -c 8
+(SLICEM): python slicem.py -i path/to/input.mrc -o path/to/output/ -p 1 -s 4 -c 8
 ```
 alternative example if running remotely
 ```
-(SLICEM): nohup python SLICEM.py -i path/to/input.mrc -o path/to/output/ -p 1 -s 4 -c 8 > log.txt &
+(SLICEM): nohup python slicem.py -i path/to/input.mrc -o path/to/output/ -m L1 -p 1 -s 2 -c 10 > log.txt &
 ```
 
 <br/>
