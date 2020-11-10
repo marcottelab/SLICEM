@@ -26,7 +26,7 @@ source deactivate #to return to base env
 First generate a score file using SLICEM.py
 ```
 usage: slicem.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine,EMD}]
-                 -p PIXEL_SIZE [-s SCALE_FACTOR] [-c NUM_WORKERS]
+                 [-s SCALE_FACTOR] [-c NUM_WORKERS]
 
 compare similarity of 2D class averages based on common lines
 
@@ -38,20 +38,18 @@ optional arguments:
                         path for output files
   -m {Euclidean,L1,cosine,EMD}, --metric {Euclidean,L1,cosine,EMD}
                         choose scoring method, Euclidean default
-  -p PIXEL_SIZE, --pixel_size PIXEL_SIZE
-                        pixel size of 2D class averages in A/pixel
   -s SCALE_FACTOR, --scale_factor SCALE_FACTOR
-                        scale factor for downsampling. (e.g. -s 2 converts 100pix box --> 50pix box)
+                        scale factor for downsampling. (e.g. -s 2 converts 100pix --> 50pix box)
   -c NUM_WORKERS, --num_workers NUM_WORKERS
                         number of CPUs to use
 ```
 **command line example**
 ```
-(SLICEM): python slicem.py -i path/to/input.mrc -o path/to/output/ -p 1 -s 4 -c 8
+(SLICEM): python slicem.py -i path/to/input.mrc -o path/to/output/ -s 4 -c 8
 ```
 alternative example if running remotely
 ```
-(SLICEM): nohup python slicem.py -i path/to/input.mrc -o path/to/output/ -m L1 -p 1 -s 2 -c 10 > log.txt &
+(SLICEM): nohup python slicem.py -i path/to/input.mrc -o path/to/output/ -m L1 -s 2 -c 10 > log.txt &
 ```
 
 <br/>
