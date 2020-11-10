@@ -9,7 +9,7 @@ from scipy.stats import wasserstein_distance
 from scipy.spatial.distance import euclidean, cosine
 
 ROTATION_DEGREES = np.arange(0, 360, 5)
-SLIDE = ['Euclidean', 'L1', 'cosine'] #metrics that require translation
+SLIDE = ['Euclidean', 'L1', 'cosine']  # Metrics requiring translation
 
 def main():
     """
@@ -27,9 +27,6 @@ def main():
                         choices=['Euclidean', 'L1', 'cosine', 'EMD'],
                         help='choose scoring method, Euclidean default')
     
-    parser.add_argument('-p', '--pixel_size', action='store', dest='pixel_size', type=float, required=True,
-                        help='pixel size of 2D class averages in A/pixel')
-    
     parser.add_argument('-s', '--scale_factor', action='store', dest='scale_factor', type=float, required=False, default=1,
                         help='scale factor for downsampling. (e.g. -s 2 converts 100pix box --> 50pix box)')
     
@@ -40,9 +37,7 @@ def main():
 
     final_scores = {}
     
-    projection_2D = get_projection_2D(mrcs=args.mrc_input,
-                                      pixel_size=args.pixel_size,
-                                      factor=args.scale_factor)
+    projection_2D = get_projection_2D(mrcs=args.mrc_input, factor=args.scale_factor)
       
     num_class_avg = len(projection_2D)
     num_1D = num_class_avg*len(ROTATION_DEGREES)
@@ -65,28 +60,28 @@ def main():
     else:
         wrapper_function = wrapper_wasserstein
     
-    for i in range(num_class_avg-1):
-        line_projections_1 = vectorize(i, projection_2D[i])
-        for j in range(i+1, num_class_avg):
-            line_projections_2 = vectorize(j, projection_2D[j])
+    with multiprocessing.Pool(args.num_workers) as pool:
+        for i in range(num_class_avg-1):
+            line_projections_1 = vectorize(i, projection_2D[i])
+            for j in range(i+1, num_class_avg):
+                line_projections_2 = vectorize(j, projection_2D[j])
 
-            projection_pairs = []
-            for line_1 in line_projections_1.values():
-                for line_2 in line_projections_2.values():
-                    projection_pairs.append((line_1, line_2))
-
-            with multiprocessing.Pool(args.num_workers) as pool:
+                projection_pairs = []
+                for line_1 in line_projections_1.values():
+                    for line_2 in line_projections_2.values():
+                        projection_pairs.append((line_1, line_2))
+            
                 pair_scores = pool.starmap(
                     wrapper_function, 
                     [(pair, pairwise_score) for pair in projection_pairs]
                 )
 
-            optimum =  min(pair_scores, key = lambda x: x[4])
+                optimum =  min(pair_scores, key = lambda x: x[4])
 
-            avg_1, deg_1, avg_2, deg_2, score = [val for val in optimum]
-            
-            final_scores[(avg_1, avg_2)] = (deg_1, deg_2, score)
-            final_scores[(avg_2, avg_1)] = (deg_2, deg_1, score)
+                avg_1, deg_1, avg_2, deg_2, score = [val for val in optimum]
+
+                final_scores[(avg_1, avg_2)] = (deg_1, deg_2, score)
+                final_scores[(avg_2, avg_1)] = (deg_2, deg_1, score)
     
     write_scores(final_scores, outpath=args.outpath)
 
@@ -107,7 +102,7 @@ class Projection:
         return(l)
 
     
-def get_projection_2D(mrcs, pixel_size, factor):
+def get_projection_2D(mrcs, factor):
     """
     read, scale and extract class averages 
     """
@@ -120,19 +115,19 @@ def get_projection_2D(mrcs, pixel_size, factor):
 
     for k, avg in projection_2D.items():
         if factor == 1:
-            projection_2D[k] = extract_class_avg(avg, pixel_size)
+            projection_2D[k] = extract_class_avg(avg)
         else:
             scaled_img = ski.transform.rescale(avg, 
                                                scale=(1/factor), 
                                                anti_aliasing=True, 
-                                               multichannel=False, #add to supress warning
-                                               mode='constant') #add to supress warning
-            projection_2D[k] = extract_class_avg(scaled_img, pixel_size*factor)
+                                               multichannel=False,  # Add to supress warning
+                                               mode='constant')     # Add to supress warning
+            projection_2D[k] = extract_class_avg(scaled_img)
             
     return projection_2D
 
 
-def extract_class_avg(avg, pixel_size):
+def extract_class_avg(avg):
     """
     keep positive values from normalized class average
     remove extra densities in class average
@@ -142,10 +137,11 @@ def extract_class_avg(avg, pixel_size):
     pos_img[pos_img < 0] = 0
     
     #dilate by pixel size to connect neighbor regions
-    extra = 3 #Angrstroms to dilate (set minimum of 3A)
-    extend = int(np.ceil((pixel_size/extra)**-1))
-
-    struct = np.ones((extend, extend), dtype=bool)
+    #extra = 3 #Angrstroms to dilate (set minimum of 3A)
+    #extend = int(np.ceil((pixel_size/extra)**-1))
+    #struct = np.ones((extend, extend), dtype=bool)
+    
+    struct = np.ones((2, 2), dtype=bool)
     dilate = ndi.binary_dilation(input=pos_img, structure=struct)
 
     labeled = ski.measure.label(dilate, connectivity=2, background=False)
@@ -295,28 +291,18 @@ def wrapper_slide_function(pair, pairwise):
     - pair is tuple from Projection class to be scored
     - pairwise is function to score vectores (e.g. Euclidean)
     """
-    
     score = slide_score(pair[0], pair[1], pairwise)
 
-    return [pair[0].class_avg, 
-            pair[0].angle, 
-            pair[1].class_avg, 
-            pair[1].angle,
-            score]
+    return [pair[0].class_avg, pair[0].angle, pair[1].class_avg, pair[1].angle, score]
 
 
 def wrapper_wasserstein(pair, pairwise):
     """
     same as above but without slide_score
     """
-    
     score = pairwise(pair[0], pair[1])
     
-    return [pair[0].class_avg, 
-            pair[0].angle, 
-            pair[1].class_avg, 
-            pair[1].angle,
-            score]
+    return [pair[0].class_avg, pair[0].angle, pair[1].class_avg, pair[1].angle, score]
 
                 
 def write_scores(final_scores, outpath):

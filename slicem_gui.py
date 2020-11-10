@@ -827,21 +827,21 @@ class SLICEM_GUI(tk.Tk):
         
         
 #utility functions from main script to make GUI standalone        
-def extract_class_avg(avg, pixel_size):
+def extract_class_avg(avg):
     """
-    keep positive values from image normalization
+    keep positive values from normalized class average
     remove extra densities in class average
     fit in minimal bounding box
     """
-    #TODO: try different region extraction or masking
-    pos_img = avg
+    pos_img = avg.copy()
     pos_img[pos_img < 0] = 0
     
     #dilate by pixel size to connect neighbor regions
-    extra = 3 #Angrstroms to dilate (set minimum of 3A)
-    extend = int(np.ceil((pixel_size/extra)**-1))
-
-    struct = np.ones((extend, extend), dtype=bool)
+    #extra = 3 #Angrstroms to dilate (set minimum of 3A)
+    #extend = int(np.ceil((pixel_size/extra)**-1))
+    #struct = np.ones((extend, extend), dtype=bool)
+    
+    struct = np.ones((2, 2), dtype=bool)
     dilate = ndi.binary_dilation(input=pos_img, structure=struct)
 
     labeled = ski.measure.label(dilate, connectivity=2, background=False)
@@ -912,8 +912,8 @@ def extract_class_avg(avg, pixel_size):
                 true_region[(i,j)] = 0
 
     new_region = true_region[y_min:y_max, x_min:x_max]
-
-    return new_region  
+    
+    return new_region
 
 
 def nearest_neighbors(complete_scores, num_class_avg, neighbors, metric):
@@ -1059,8 +1059,8 @@ def pairwise_l1(a, b):
     score = sum(abs(a.vector - b.vector))
     return score
 
-def pairwise_cosie(a, b):
-    score = spatial.distance.cosine(a.vector - b.vector)
+def pairwise_cosine(a, b):
+    score = spatial.distance.cosine(a.vector, b.vector)
     return score 
 
 def pairwise_xcorr(a, b):
