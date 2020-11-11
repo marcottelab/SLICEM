@@ -317,7 +317,7 @@ class SLICEM_GUI(tk.Tk):
         
         extract_2D = {}
         for k, avg in projection_2D.items():
-            extract_2D[k] = extract_class_avg(avg, pixel_size)
+            extract_2D[k] = extract_class_avg(avg)
             
         print('Inputs Loaded!')
 
