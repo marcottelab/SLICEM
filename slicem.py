@@ -23,14 +23,14 @@ def main():
     parser.add_argument('-o', '--outpath', action='store', dest='outpath', required=True,
                         help='path for output files')
     
-    parser.add_argument('-m', '--metric', action='store', dest='metric', required=False, default='Euclidean',
-                        choices=['Euclidean', 'L1', 'cosine', 'EMD'],
+    parser.add_argument('-m', '--metric', action='store', dest='metric', required=False, 
+                        default='Euclidean', choices=['Euclidean', 'L1', 'cosine', 'EMD'],
                         help='choose scoring method, Euclidean default')
     
-    parser.add_argument('-s', '--scale_factor', action='store', dest='scale_factor', type=float, required=False, default=1,
-                        help='scale factor for downsampling. (e.g. -s 2 converts 100pix box --> 50pix box)')
+    parser.add_argument('-s', '--scale_factor', action='store', dest='scale_factor', required=False, type=float, default=1,
+                        help='scale factor for downsampling. (e.g. -s 2 converts 200pix box --> 100pix box)')
     
-    parser.add_argument('-c', '--num_workers', action='store', dest='num_workers', type=int, required=False, default=1,
+    parser.add_argument('-c', '--num_workers', action='store', dest='num_workers', required=False, type=int, default=1,
                         help='number of CPUs to use')
 
     args = parser.parse_args()
@@ -117,11 +117,13 @@ def get_projection_2D(mrcs, factor):
         if factor == 1:
             projection_2D[k] = extract_class_avg(avg)
         else:
-            scaled_img = ski.transform.rescale(avg, 
-                                               scale=(1/factor), 
-                                               anti_aliasing=True, 
-                                               multichannel=False,  # Add to supress warning
-                                               mode='constant')     # Add to supress warning
+            scaled_img = ski.transform.rescale(
+                avg, 
+                scale=(1/factor), 
+                anti_aliasing=True, 
+                multichannel=False,  # Add to supress warning
+                mode='constant'      # Add to supress warning
+            )     
             projection_2D[k] = extract_class_avg(scaled_img)
             
     return projection_2D
@@ -188,7 +190,7 @@ def extract_class_avg(avg):
             distance = {}
             for region, center in box_centers.items():
                 x2 = np.array(center)
-                distance[region] = spatial.distance.euclidean(x1, x2)  
+                distance[region] = euclidean(x1, x2)  
             region = min(distance, key=distance.get) 
             #use region closest to center
             selected = region
@@ -274,10 +276,15 @@ def slide_score(a, b, pairwise_score):
             
         for i in range(0, dol+1):
             v = np.pad(shift.vector, pad_width=(i, dol-i), mode='constant')
-            projection_shifts.append(Projection(class_avg = str(shift.class_avg)+'_'+str(i),
-                                                angle = shift.angle,
-                                                vector = v))
-
+            
+            projection_shifts.append(
+                Projection(
+                    class_avg=str(shift.class_avg)+'_'+str(i),
+                    angle = shift.angle,
+                    vector = v
+                )
+            )
+        
         scores = []
         
         for shifted in projection_shifts:

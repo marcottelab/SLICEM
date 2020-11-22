@@ -6,7 +6,7 @@ import skimage as ski
 import networkx as nx
 from igraph import Graph
 from scipy import ndimage as ndi
-from scipy import spatial, signal, stats
+from scipy.spatial.distance import euclidean
 
 import tkinter as tk
 from tkinter import ttk
@@ -21,7 +21,6 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 import warnings
-
 warnings.filterwarnings("ignore", category=UserWarning)
 matplotlib.use('TkAgg')
 
@@ -52,48 +51,45 @@ class SLICEM_GUI(tk.Tk):
         mrc_label.grid(row=0, column=0, sticky=tk.E, pady=10) 
         self.mrc_entry = ttk.Entry(input_tab, width=20)
         self.mrc_entry.grid(row=0, column=1, sticky=tk.W, pady=10) 
-        self.mrc_button = ttk.Button(input_tab, 
-                                     text="Browse", 
-                                     command=lambda: self.set_text(text=self.askfile(),
-                                                                   entry=self.mrc_entry))
+        self.mrc_button = ttk.Button(
+            input_tab, 
+            text="Browse", 
+            command=lambda: self.set_text(
+                text=self.askfile(),
+                entry=self.mrc_entry
+            )
+        )
         self.mrc_button.grid(row=0, column=2, sticky=tk.W, pady=2)
-
-        
+       
         scores_label = ttk.Label(input_tab, text="path to SLICEM scores: ")
         scores_label.grid(row=1, column=0, sticky=tk.E, pady=10) 
         self.score_entry = ttk.Entry(input_tab, width=20)
         self.score_entry.grid(row=1, column=1, sticky=tk.W, pady=10) 
-        self.score_button = ttk.Button(input_tab, 
-                                       text="Browse", 
-                                       command=lambda: self.set_text(text=self.askfile(),
-                                                                     entry=self.score_entry))
-        self.score_button.grid(row=1, column=2, sticky=tk.W, pady=2)        
+        self.score_button = ttk.Button(
+            input_tab, 
+            text="Browse", 
+            command=lambda: self.set_text(
+                text=self.askfile(),
+                entry=self.score_entry
+            )
+        )
+        self.score_button.grid(row=1, column=2, sticky=tk.W, pady=2)             
+
+        scale_label = ttk.Label(input_tab, text="scale factor (if used): ")
+        scale_label.grid(row=2, column=0, sticky=tk.E, pady=10) 
+        self.scale_entry = ttk.Entry(input_tab, width=5)
+        self.scale_entry.grid(row=2, column=1, sticky=tk.W, pady=10)
         
-        
-        pixel_label = ttk.Label(input_tab, text="pixel size of 2D classes ("u"\u212B""/pix): ")
-        pixel_label.grid(row=2, column=0, sticky=tk.E, pady=10) 
-        self.pixel_entry = ttk.Entry(input_tab, width=20)
-        self.pixel_entry.grid(row=2, column=1, sticky=tk.W, pady=10) 
-        
-        
-        metric_label = ttk.Label(input_tab, text="metric used for scoring: ")
-        metric_label.grid(row=3, column=0, sticky=tk.E, pady=2)
-        options = ['Euclidean', 'L1', 'cosine', 'cross-correlation',
-                   'norm-xcorr', 'norm-Euclidean']
-        self.metric = tk.StringVar(input_tab)
-        self.metric.set(options[0])
-        self.opt_menu = ttk.OptionMenu(input_tab, self.metric, options[0], *options)
-        self.opt_menu.config(width=16)
-        self.opt_menu.grid(row=3, column=1, sticky=tk.E, pady=10)
-        
-        
-        self.load_button = ttk.Button(input_tab,
-                                      text='Load Inputs',
-                                      command=lambda: self.load_inputs(self.mrc_entry,
-                                                                       self.score_entry,
-                                                                       self.pixel_entry,
-                                                                       self.metric))
-        self.load_button.grid(row=4, column=1, pady=20)
+        self.load_button = ttk.Button(
+            input_tab, 
+            text='Load Inputs', 
+            command=lambda: self.load_inputs(
+                self.mrc_entry.get(), 
+                self.score_entry.get(),
+                self.scale_entry.get()
+            )
+        )
+        self.load_button.grid(row=3, column=1, pady=20)
         ############################################################################           
     
     
@@ -108,14 +104,12 @@ class SLICEM_GUI(tk.Tk):
         nettopFrame.grid(row=0, column=0, sticky='nsew')
 
         self.netcanvas = None
-        self.nettoolbar = None
-        
+        self.nettoolbar = None     
 
         #BOTTOM FRAME
         netbottomFrame = ttk.Frame(network_tab, width=600, height=100)
         netbottomFrame.grid(row=1, column=0, sticky='nsew')
         netbottomFrame.grid_propagate(0)
-
         
         self.detection = tk.StringVar(network_tab)
         self.detection.set('walktrap')
@@ -123,18 +117,22 @@ class SLICEM_GUI(tk.Tk):
         comm_label = ttk.Label(netbottomFrame, text='community detection algorithm: ')
         comm_label.grid(row=0, column=0, sticky=tk.E)        
 
-        self.comm1 = ttk.Radiobutton(netbottomFrame, 
-                                     text='walktrap', 
-                                     variable=self.detection, 
-                                     value='walktrap')
-        self.comm1.grid(row=0, column=1, padx=5, sticky=tk.W)
+        self.community_wt = ttk.Radiobutton(
+            netbottomFrame, 
+            text='walktrap', 
+            variable=self.detection, 
+            value='walktrap'
+        )
+        self.community_wt.grid(row=0, column=1, padx=5, sticky=tk.W)
         
-        self.comm2 = ttk.Radiobutton(netbottomFrame, 
-                                     text='betweenness', 
-                                     variable=self.detection,
-                                     value='betweenness')
-        self.comm2.grid(row=0, column=2, padx=3, sticky=tk.W)
-        
+        #EV: Errors w/ betweenness iGraph version, temporarily remove
+        #self.community_eb = ttk.Radiobutton(
+        #    netbottomFrame, 
+        #    text='betweenness', 
+        #    variable=self.detection,
+        #    value='betweenness'
+        #)
+        #self.community_eb.grid(row=0, column=2, padx=3, sticky=tk.W)  
         
         self.network = tk.StringVar(network_tab)
         self.network.set('knn')
@@ -142,56 +140,63 @@ class SLICEM_GUI(tk.Tk):
         net_label = ttk.Label(netbottomFrame, text='construct network from: ')
         net_label.grid(row=1, column=0, sticky=tk.E)
         
-        self.net1 = ttk.Radiobutton(netbottomFrame, 
-                                    text='nearest neighbors', 
-                                    variable=self.network, 
-                                    value='knn')
+        self.net1 = ttk.Radiobutton(
+            netbottomFrame, 
+            text='nearest neighbors', 
+            variable=self.network, 
+            value='knn'
+        )
         self.net1.grid(row=1, column=1, padx=5, sticky=tk.W)
         
-        self.net2 = ttk.Radiobutton(netbottomFrame, 
-                                    text='top n scores', 
-                                    variable=self.network,
-                                    value='top_n')
+        self.net2 = ttk.Radiobutton(
+            netbottomFrame, 
+            text='top n scores', 
+            variable=self.network,
+            value='top_n'
+        )
         self.net2.grid(row=2, column=1, padx=5, sticky=tk.W)
 
         knn_label = ttk.Label(netbottomFrame, text='(# of k): ')
         knn_label.grid(row=1, column=2, sticky=tk.W)
         self.knn_entry = ttk.Entry(netbottomFrame, width=6)
         self.knn_entry.insert(0, 0)
-        self.knn_entry.grid(row=1, column=2, sticky=tk.E)
+        self.knn_entry.grid(row=1, column=2, padx=50, sticky=tk.W)
         
         topn_label = ttk.Label(netbottomFrame, text='(# of n): ')
         topn_label.grid(row=2, column=2, sticky=tk.W)
         self.topn_entry = ttk.Entry(netbottomFrame, width=6)
         self.topn_entry.insert(0, 0)
-        self.topn_entry.grid(row=2, column=2, sticky=tk.E)
+        self.topn_entry.grid(row=2, column=2, padx=50, sticky=tk.W)        
         
+        self.cluster = ttk.Button(
+            netbottomFrame,
+            width=12,
+            text='cluster', 
+            command=lambda: self.slicem_cluster(
+                self.detection.get(),
+                self.network.get(),
+                int(self.knn_entry.get()),
+                int(self.topn_entry.get())
+            )
+        )
+        self.cluster.grid(row=0, column=3, sticky=tk.W, padx=10, pady=2)        
         
-        self.cluster = ttk.Button(netbottomFrame,
-                                  width=12,
-                                  text='cluster', 
-                                  command=lambda: self.slicem_cluster(metric,
-                                                                      self.detection.get(),
-                                                                      extract_2D,
-                                                                      complete_scores,
-                                                                      self.network.get(),
-                                                                      int(self.knn_entry.get()),
-                                                                      int(self.topn_entry.get())))
-        self.cluster.grid(row=0, column=3, sticky=tk.W, padx=10, pady=2)
+        self.net_plot = ttk.Button(
+            netbottomFrame,
+            width=12,
+            text='plot network', 
+            command=lambda: self.plot_slicem_network(
+                self.network.get(),
+                nettopFrame)
+        )
+        self.net_plot.grid(row=1, column=3, sticky=tk.W, padx=10, pady=2)       
         
-        
-        self.net_plot = ttk.Button(netbottomFrame,
-                                   width=12,
-                                   text='plot network', 
-                                   command=lambda: self.plot_slicem_network(self.network.get(),
-                                                                            nettopFrame))
-        self.net_plot.grid(row=1, column=3, sticky=tk.W, padx=10, pady=2)
-        
-        
-        self.tiles = ttk.Button(netbottomFrame, 
-                                width=12,
-                                text='plot 2D classes', 
-                                command=lambda: self.plot_tiles(nettopFrame))
+        self.tiles = ttk.Button(
+            netbottomFrame, 
+            width=12,
+            text='plot 2D classes', 
+            command=lambda: self.plot_tiles()
+        )
         self.tiles.grid(row=2, column=3, sticky=tk.W, padx=10, pady=2)
         ############################################################################
 
@@ -211,38 +216,41 @@ class SLICEM_GUI(tk.Tk):
         self.projcanvas = None
         self.projtoolbar = None
 
-
         #BOTTOM FRAME
         projbottomFrame = ttk.Frame(projection_tab, width=600, height=50)
         projbottomFrame.grid(row=1, column=0, sticky='nsew')
-        projbottomFrame.grid_propagate(0)
-        
+        projbottomFrame.grid_propagate(0)       
         
         avg1_label = ttk.Label(projbottomFrame, text='class average 1: ')
         avg1_label.grid(row=0, column=0, sticky=tk.E, padx=2)
         self.avg1 = ttk.Entry(projbottomFrame, width=5)
-        #self.avg1.insert(0, 0)
         self.avg1.grid(row=0, column=1, padx=2)
         
         avg2_label = ttk.Label(projbottomFrame, text='class avereage 2: ')
         avg2_label.grid(row=0, column=2, sticky=tk.E, padx=2)
         self.avg2 = ttk.Entry(projbottomFrame, width=5)
-        #self.avg2.insert(0, 1)
-        self.avg2.grid(row=0, column=3, padx=2)
+        self.avg2.grid(row=0, column=3, padx=2)        
         
-        
-        self.proj_button = ttk.Button(projbottomFrame, 
-                                      text='plot projections',
-                                      command=lambda: self.plot_projections(int(self.avg1.get()),
-                                                                            int(self.avg2.get()),
-                                                                            projtopFrame))
+        self.proj_button = ttk.Button(
+            projbottomFrame, 
+            text='plot projections',
+            command=lambda: self.plot_projections(
+                int(self.avg1.get()),
+                int(self.avg2.get()),
+                projtopFrame
+            )
+        )
         self.proj_button.grid(row=0, column=4, padx=20)
         
-        self.overlay_button = ttk.Button(projbottomFrame,
-                                         text='plot overlap',
-                                         command=lambda: self.overlay_lines(int(self.avg1.get()),
-                                                                            int(self.avg2.get()),
-                                                                            projtopFrame))
+        self.overlay_button = ttk.Button(
+            projbottomFrame,
+            text='plot overlap',
+            command=lambda: self.overlay_lines(
+                int(self.avg1.get()),
+                int(self.avg2.get()),
+                projtopFrame
+            )
+        )
         self.overlay_button.grid(row=0, column=5, padx=12)
     ################################################################################     
 
@@ -254,34 +262,48 @@ class SLICEM_GUI(tk.Tk):
         star_label.grid(row=0, column=0, sticky=tk.E, pady=10)
         self.star_entry = ttk.Entry(output_tab, width=20)
         self.star_entry.grid(row=0, column=1, stick=tk.W, pady=10)
-        self.star_button = ttk.Button(output_tab, 
-                                      text="Browse", 
-                                      command=lambda: self.set_text(text=self.askfile(),
-                                                                    entry=self.star_entry))
+        self.star_button = ttk.Button(
+            output_tab, 
+            text="Browse", 
+            command=lambda: self.set_text(
+                text=self.askfile(),
+                entry=self.star_entry
+            )
+        )
         self.star_button.grid(row=0, column=2, sticky=tk.W, pady=2)
         
         outdir_label = ttk.Label(output_tab, text='directory to save files in: ')
         outdir_label.grid(row=1, column=0, sticky=tk.E, pady=10)
         self.out_entry = ttk.Entry(output_tab, width=20)
         self.out_entry.grid(row=1, column=1, sticky=tk.W, pady=10)
-        self.out_button = ttk.Button(output_tab, 
-                                     text="Browse", 
-                                     command=lambda: self.set_text(text=self.askpath(),
-                                                                   entry=self.out_entry))
-        self.out_button.grid(row=1, column=2, sticky=tk.W, pady=2)
+        self.out_button = ttk.Button(
+            output_tab, 
+            text="Browse", 
+            command=lambda: self.set_text(
+                text=self.askpath(),
+                entry=self.out_entry
+            )
+        )
+        self.out_button.grid(row=1, column=2, sticky=tk.W, pady=2) 
         
-        
-        self.write_button = ttk.Button(output_tab,
-                                       text='Write Star Files',
-                                       command=lambda: self.write_star_files(self.star_entry.get(),
-                                                                             self.out_entry.get()))
+        self.write_button = ttk.Button(
+            output_tab,
+            text='Write Star Files',
+            command=lambda: self.write_star_files(
+                self.star_entry.get(),
+                self.out_entry.get()
+            )
+        )
         self.write_button.grid(row=2, column=1, pady=20)
         
-        
-        self.write_edges = ttk.Button(output_tab,
-                                      text='Write Edge List',
-                                      command=lambda: self.write_edge_list(self.network.get(),
-                                                                           self.out_entry.get()))
+        self.write_edges = ttk.Button(
+            output_tab,
+            text='Write Edge List',
+            command=lambda: self.write_edge_list(
+                self.network.get(),
+                self.out_entry.get()
+            )
+        )
         self.write_edges.grid(row=3, column=1, pady=10)
     ################################################################################      
     
@@ -299,26 +321,43 @@ class SLICEM_GUI(tk.Tk):
         return complete_scores
     
     
-    def load_class_avg(self, mrc_input):
+    def load_class_avg(self, mrcs, factor):
+        """
+        read, scale and extract class averages 
+        """
         projection_2D = {}
-        with mrcfile.open(mrc_input) as mrc:
-            for i, data in enumerate(mrc.data):
-                projection_2D[i] = data.astype('float64')
-        return projection_2D
-    
-    
-    def load_inputs(self, mrc_entry, score_entry, pixel_entry, metric_entry):
-        global projection_2D, extract_2D, complete_scores, pixel_size, metric
-        
-        projection_2D = self.load_class_avg(mrc_entry.get())
-        complete_scores = self.load_scores(score_entry.get())
-        pixel_size = float(pixel_entry.get())
-        metric = metric_entry.get()
-        
         extract_2D = {}
+        
+        if len(factor) == 0: # Empty entry, set factor 1
+            factor = 1
+
+        with mrcfile.open(mrcs) as mrc:
+            for i, data in enumerate(mrc.data):
+                projection_2D[i] = data
+            mrc.close()
+
         for k, avg in projection_2D.items():
-            extract_2D[k] = extract_class_avg(avg)
-            
+            if factor == 1:
+                extract_2D[k] = extract_class_avg(avg)
+            else:
+                scaled_img = ski.transform.rescale(
+                    avg, 
+                    scale=(1/float(factor)), 
+                    anti_aliasing=True, 
+                    multichannel=False,  # Add to supress warning
+                    mode='constant'      # Add to supress warning
+                )     
+                extract_2D[k] = extract_class_avg(scaled_img)
+
+        return projection_2D, extract_2D
+    
+    
+    def load_inputs(self, mrc_entry, score_entry, scale_entry):
+        global projection_2D, extract_2D, num_class_avg, complete_scores
+        
+        projection_2D, extract_2D = self.load_class_avg(mrc_entry, scale_entry)
+        num_class_avg = len(projection_2D)
+        complete_scores = self.load_scores(score_entry)  
         print('Inputs Loaded!')
 
         
@@ -345,82 +384,50 @@ class SLICEM_GUI(tk.Tk):
         tk.messagebox.showwarning(None, 'Clustering failed.\nTry adjusting # of edges or switching methods')
       
     
-    def slicem_cluster(self, 
-                       metric, 
-                       community_detection, 
-                       projection_2D, 
-                       complete_scores, 
-                       network_from, 
-                       neighbors, 
-                       top):
+    def slicem_cluster(self, community_detection, network_from, neighbors, top):
         
         global flat, clusters, G, colors
         
-        num_class_avg = len(projection_2D)
-        
-        flat, clusters, G = self.create_network(metric=metric,
-                                               community_detection=community_detection,
-                                               projection_2D=projection_2D, 
-                                               num_class_avg=num_class_avg, 
-                                               complete_scores=complete_scores, 
-                                               network_from=network_from, 
-                                               neighbors=neighbors, 
-                                               top=top)
+        flat, clusters, G = self.create_network(
+            community_detection=community_detection, 
+            network_from=network_from, 
+            neighbors=neighbors, 
+            top=top
+        )
         
         colors = get_plot_colors(clusters, G)
         
         print('clusters computed!')   
         
         
-    def create_network(self,
-                       metric,
-                       community_detection,
-                       projection_2D, 
-                       num_class_avg, 
-                       complete_scores, 
-                       network_from, 
-                       neighbors, 
-                       top):
+    def create_network(self, community_detection, network_from, neighbors, top):
         """
         get new clusters depending on input options
         """
-
         if network_from == 'top_n':
             sort_by_scores = []
 
             for pair, score in complete_scores.items():
                 sort_by_scores.append([pair[0], pair[1], score[2]])
+            top_n = sorted(sort_by_scores, reverse=False, key=lambda x: x[2])[:top]
 
-            if metric != 'cross-correlation':
-                top_n = sorted(sort_by_scores, reverse=False, key=lambda x: x[2])[:top]
+            #convert from distance to similarity
+            for score in top_n:
+                c = 1/(1 + score[2])
+                score[2] = c
 
-                #convert from distance to similarity (not zscore like with knn)
-                for score in top_n:
-                    c = 1/(1 + score[2])
-                    score[2] = c
-            else:
-                top_n = sorted(sort_by_scores, reverse=True, key=lambda x: x[2])[:top]
-
-            #change to tuple for iGraph and networkx
             flat = [tuple(pair) for pair in top_n]
 
-        else:
+        elif network_from == 'knn': 
             flat = []
-
-            projection_knn = nearest_neighbors(complete_scores=complete_scores, 
-                                               num_class_avg=num_class_avg, 
-                                               neighbors=neighbors, 
-                                               metric=metric)
+            projection_knn = nearest_neighbors(neighbors=neighbors)
 
             for projection, knn in projection_knn.items():
                 for n in knn:
                     #(proj_1, proj_2, score)
-                    #abs score to correct for distance vs similarity
                     flat.append((projection, n[0], abs(n[3])))
 
-        #recluster the new knn or top_n scores
         clusters = {}
-
         g = Graph.TupleList(flat, weights=True)
 
         if community_detection == 'walktrap':
@@ -441,20 +448,16 @@ class SLICEM_GUI(tk.Tk):
 
         #convert node IDs back to ints
         for cluster, nodes in clusters.items():
-            clusters[cluster] = [int(node) for node in nodes]
-            clusters[cluster] = sorted(nodes)
+            clusters[cluster] = sorted([int(node) for node in nodes])
+   
+        remove_outliers(clusters)
 
-        #and remove outliers
-        remove_outliers(clusters=clusters, projection_2D=projection_2D)
-
-        #adds singles to clusters if they are not in top n scores
         clustered = []
-
         for cluster, nodes in clusters.items():
             for n in nodes:
                 clustered.append(n)
 
-        clusters['singles'] = []
+        clusters['singles'] = [] #Add singles to clusters if not in top n scores
 
         for node_key in projection_2D:
             if node_key not in clustered:
@@ -477,7 +480,7 @@ class SLICEM_GUI(tk.Tk):
 
         
     def plot_slicem_network(self, network_from, frame):
-        
+        #TODO: adjust k, scale for clearer visualization
         if network_from == 'knn':
             positions = nx.spring_layout(G, weight='weight', k=0.3, scale=3.5)
         else:
@@ -506,13 +509,15 @@ class SLICEM_GUI(tk.Tk):
         self.nettoolbar.update()
 
 
-    def plot_tiles(self, frame):
+    def plot_tiles(self):
         """
         plot 2D class avgs sorted and colored by cluster
         """
+        #TODO: adjust plot, border and text_box sizes
+        
         ordered_projections = []
-        colors_2D = []
         flat_clusters = []
+        colors_2D = []
 
         for cluster, nodes in clusters.items():
             for n in nodes:
@@ -525,63 +530,68 @@ class SLICEM_GUI(tk.Tk):
                 if n in nodes:
                     colors_2D.append(colors[i])
 
-        gc = int(np.ceil(np.sqrt(len(ordered_projections))))
+        grid_cols = int(np.ceil(np.sqrt(len(ordered_projections))))
 
-        if len(ordered_projections) <= (gc**2 - gc):
-            gr = gc - 1
+        if len(ordered_projections) <= (grid_cols**2 - grid_cols):
+            grid_rows = grid_cols - 1
         else:
-            gr = gc
+            grid_rows = grid_cols
 
         #assuming images are same size, get shape
         l, w = ordered_projections[0].shape
 
         #add blank images to pack in grid
-        while len(ordered_projections) < gr*gc:
+        while len(ordered_projections) < grid_rows*grid_cols:
             ordered_projections.append(np.zeros((l, w)))
+            colors_2D.append((0., 0., 0.))
+            flat_clusters.append('')
 
-        f = Figure(figsize=(4,4), dpi=200)
+        f = Figure()
 
         grid = ImageGrid(f, 111, #similar to subplot(111)
-                         nrows_ncols=(gr, gc), #creates grid of axes
+                         nrows_ncols=(grid_rows, grid_cols), #creates grid of axes
                          axes_pad=0.05) #pad between axes in inch
-
+        
+        lw = 1.75
+        text_box_size = 5 
         props = dict(boxstyle='round', facecolor='white')
-
+        
         for i, (ax, im) in enumerate(zip(grid, ordered_projections)):
-            #iterate over the grid returns the axes
             ax.imshow(im, cmap='gray')
 
-            ax.spines['bottom'].set_color(colors_2D[i])
-            ax.spines['bottom'].set_linewidth(2)
+            for side, spine in ax.spines.items():
+                spine.set_color(colors_2D[i])
+                spine.set_linewidth(lw)
 
-            ax.spines['top'].set_color(colors_2D[i])
-            ax.spines['top'].set_linewidth(2)
-
-            ax.spines['left'].set_color(colors_2D[i])
-            ax.spines['left'].set_linewidth(2)
-
-            ax.spines['right'].set_color(colors_2D[i])
-            ax.spines['right'].set_linewidth(2)
-
-            ax.set_xticklabels([])
-            ax.xaxis.set_tick_params(which='both', length=0)
-            ax.set_yticklabels([])
-            ax.yaxis.set_tick_params(which='both', length=0)
+            ax.get_yaxis().set_ticks([])
+            ax.get_xaxis().set_ticks([])
 
             text = str(flat_clusters[i])
-            ax.text(6, 6, text, va='top', ha='left', bbox=props, size=3)
+            ax.text(1, 1, text, va='top', ha='left', bbox=props, size=text_box_size)
             
-        newWindow = tk.Toplevel(frame)
-
-        canvas = FigureCanvasTkAgg(f, newWindow)
+        newWindow = tk.Toplevel()
+        newWindow.grid_rowconfigure(0, weight=1)
+        newWindow.grid_columnconfigure(0, weight=1)
+        
+        #PLOT FRAME
+        plotFrame = tk.Frame(newWindow, bg='lightgrey', width=600, height=400)
+        plotFrame.grid(row=0, column=0, sticky='nsew')
+        
+        canvas = FigureCanvasTkAgg(f, plotFrame)
         canvas.draw()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.figure.tight_layout()
         
-        toolbar = NavigationToolbar2Tk(canvas, newWindow)
-        toolbar.update()      
+
+        #TOOLBAR FRAME
+        toolbarFrame = ttk.Frame(newWindow, width=600, height=100)
+        toolbarFrame.grid(row=1, column=0, sticky='nsew')
+        toolbarFrame.grid_propagate(0)
         
+        toolbar = NavigationToolbar2Tk(canvas, toolbarFrame)
+        toolbar.update()
+           
 
     def plot_projections(self, p1, p2, frame):
         
@@ -597,56 +607,13 @@ class SLICEM_GUI(tk.Tk):
             ref = ski.transform.rotate(projection1, angle1, resize=True)
             comp = ski.transform.rotate(projection2, angle2, resize=True)
 
-            rx, ry = np.shape(ref)
-            cx, cy = np.shape(comp)
+            ref_square, comp_square = make_equal_square_images(ref, comp)
 
-            m = max(rx, ry, cx, cy)
-
-            if rx < m:    
-                if (m-rx) % 2  == 0:
-                    rx_pad = int((m-rx)/2)
-                    ref = np.pad(ref, pad_width=((rx_pad,rx_pad), (0,0)), mode='constant')
-                else:
-                    rx_pad = int((m-rx)/2)
-                    ref = np.pad(ref, pad_width=((rx_pad+1,rx_pad), (0,0)), mode='constant')  
-
-            if ry < m:
-                if (m-ry) % 2 == 0:
-                    ry_pad = int((m-ry)/2)
-                    ref = np.pad(ref, pad_width=((0,0), (ry_pad,ry_pad)), mode='constant')
-                else:
-                    ry_pad = int((m-ry)/2)
-                    ref = np.pad(ref, pad_width=((0,0), (ry_pad+1,ry_pad)), mode='constant')
-
-            if cx < m:    
-                if (m-cx) % 2  == 0:
-                    cx_pad = int((m-cx)/2)
-                    comp = np.pad(comp, pad_width=((cx_pad,cx_pad), (0,0)), mode='constant')
-                else:
-                    cx_pad = int((m-cx)/2)
-                    comp = np.pad(comp, pad_width=((cx_pad+1,cx_pad), (0,0)), mode='constant')
-
-            if cy < m:
-                if (m-cy) % 2 == 0:
-                    cy_pad = int((m-cy)/2)
-                    comp = np.pad(comp, pad_width=((0,0), (cy_pad,cy_pad)), mode='constant')
-                else:
-                    cy_pad = int((m-cy)/2)
-                    comp = np.pad(comp, pad_width=((0,0), (cy_pad+1,cy_pad)), mode='constant')   
-
-            ref_intensity = ref.sum(axis=0)
-            ref_list = range(1, len(ref_intensity)+1)
-
-            comp_intensity = comp.sum(axis=0)
-            comp_list = range(1, len(comp_intensity)+1)
-
-            ref_max = np.amax(ref_intensity)
-            comp_max = np.amax(comp_intensity)
-            axis_max = max(ref_max, comp_max) + 0.1*max(ref_max, comp_max)
-
-            ref_min = np.amin(ref_intensity)
-            comp_min = np.amin(comp_intensity)
-            axis_min = min(ref_min, comp_min)
+            ref_intensity = ref_square.sum(axis=0)
+            comp_intensity = comp_square.sum(axis=0)
+            
+            y_axis_max = max(np.amax(ref_intensity), np.amax(comp_intensity))
+            y_axis_min = min(np.amin(ref_intensity), np.amin(comp_intensity))
 
             f = Figure(figsize=(4,4))
             spec = gridspec.GridSpec(ncols=2, nrows=2, figure=f)
@@ -657,28 +624,27 @@ class SLICEM_GUI(tk.Tk):
 
             #  PROJECTION_1
             #2D projection image
-            tl.imshow(ref, cmap=plt.get_cmap('gray'), aspect='equal') 
+            tl.imshow(ref_square, cmap=plt.get_cmap('gray'), aspect='equal') 
             tl.axis('off')
 
             #1D line projection
-            bl.plot(ref_list, ref_intensity, color='black')
+            bl.plot(ref_intensity, color='black')
             bl.xaxis.set_visible(False)
-            #bl.set_ylabel('Intensity')
             bl.yaxis.set_visible(False)
-            bl.set_ylim([axis_min, axis_max+0.5])
-            bl.fill_between(ref_list, 0, ref_intensity, alpha=0.5, color='deepskyblue')
+            bl.set_ylim([y_axis_min, (y_axis_max + 0.025*y_axis_max)])
+            bl.fill_between(range(len(ref_intensity)), ref_intensity, alpha=0.5, color='deepskyblue')
 
             #  PROJECTION_2
             #2D projection image
-            tr.imshow(comp, cmap=plt.get_cmap('gray'), aspect='equal')
+            tr.imshow(comp_square, cmap=plt.get_cmap('gray'), aspect='equal')
             tr.axis('off')
 
             #lD line projection
-            br.plot(comp_list, comp_intensity, color='black')
+            br.plot(comp_intensity, color='black')
             br.xaxis.set_visible(False)
             br.yaxis.set_visible(False)
-            br.set_ylim([axis_min, axis_max+0.5])
-            br.fill_between(comp_list, 0, comp_intensity, alpha=0.5, color='red')
+            br.set_ylim([y_axis_min, (y_axis_max + 0.025*y_axis_max)])
+            br.fill_between(range(len(comp_intensity)), comp_intensity, alpha=0.5, color='yellow')
 
             asp = np.diff(bl.get_xlim())[0] / np.diff(bl.get_ylim())[0]
             bl.set_aspect(asp)
@@ -710,63 +676,50 @@ class SLICEM_GUI(tk.Tk):
         else:
             a1 = complete_scores[p1, p2][0]
             a2 = complete_scores[p1, p2][1]
-            
+
             projection1 = make_1D(extract_2D[p1], a1)
             projection2 = make_1D(extract_2D[p2], a2)
 
-            if metric == 'norm-xcorr' or metric == 'norm-Euclidean':
-                projection1.vector = stats.zscore(projection1.vector)
-                projection2.vector = stats.zscore(projection2.vector)
-            
-            #first get location where line projections have optimum overlap
-            if metric == 'Euclidean' or metric == 'norm-Euclidean':
-                score, info = slide_score(projection1, projection2, pairwise_l2)
-            elif metric == 'L1':
-                score, info = slide_score(projection1, projection2, pairwise_l1)
-            elif metric == 'cosine':    
-                score, info = slide_score(projection1, projection2, pairwise_cosie)
-            elif metric == 'cross-correlation' or metric == 'norm-xcorr':
-                score, info = pairwise_xcorr(projection1, projection2)
+            #get location where line projections have optimum overlap using L2
+            score, info = slide_score(projection1, projection2, pairwise_l2)
 
             loc = info[2]
+
             dol = abs(projection1.size() - projection2.size())
 
             if projection1.size() >= projection2.size():
                 ref = info[0]
                 comp = info[1]
                 ref_intensity = ref.vector
-                comp_intensity = np.pad(comp.vector, pad_width=(loc[0], dol-loc), mode='constant')
+                comp_intensity = np.pad(comp.vector, pad_width=(loc, dol-loc), mode='constant')
             else:
                 ref = info[1]
                 comp = info[0]        
-                ref_intensity = np.pad(ref.vector, pad_width=(loc[0], dol-loc), mode='constant')    
+                ref_intensity = np.pad(ref.vector, pad_width=(loc, dol-loc), mode='constant')    
                 comp_intensity = comp.vector
-
-            ref_list = range(1, len(ref_intensity)+1)
-            comp_list = range(1, len(comp_intensity)+1)
 
             f = Figure(figsize=(4,4))
             ax = f.add_subplot(111)
 
-            x_axis_max = max(len(ref_intensity), len(comp_intensity))+1
+            x_axis_max = max(len(ref_intensity), len(comp_intensity))
             y_axis_max = max(np.amax(ref_intensity), np.amax(comp_intensity))
             y_axis_min = min(np.amin(ref_intensity), np.amin(comp_intensity))
 
-            ax.plot(ref_list, ref_intensity, color='black')
-            ax.plot(comp_list, comp_intensity, color='black')
+            ax.plot(ref_intensity, color='black')
+            ax.plot(comp_intensity, color='black')
 
-            ax.fill_between(ref_list, 0, ref_intensity, alpha=0.35, color='deepskyblue')
-            ax.fill_between(comp_list, 0, comp_intensity, alpha=0.35, color='red')
+            ax.fill_between(range(len(ref_intensity)), ref_intensity, alpha=0.35, color='deepskyblue')
+            ax.fill_between(range(len(comp_intensity)), comp_intensity, alpha=0.35, color='yellow')
 
             ax.set_ylabel('Intensity')
             ax.set_ylim([y_axis_min, (y_axis_max + 0.025*y_axis_max)])
 
-            ax.set_xticks(np.arange(0, x_axis_max, step=10))
+            ax.set_xticks(np.arange(0, x_axis_max, step=int((0.1*x_axis_max))))
             ax.set_xlim(0, x_axis_max)
             ax.set_xlabel('Pixel')
-            
+
             f.tight_layout()
-            
+
             if self.projcanvas:
                 self.projcanvas.get_tk_widget().destroy()
                 self.projtoolbar.destroy()
@@ -835,11 +788,6 @@ def extract_class_avg(avg):
     """
     pos_img = avg.copy()
     pos_img[pos_img < 0] = 0
-    
-    #dilate by pixel size to connect neighbor regions
-    #extra = 3 #Angrstroms to dilate (set minimum of 3A)
-    #extend = int(np.ceil((pixel_size/extra)**-1))
-    #struct = np.ones((extend, extend), dtype=bool)
     
     struct = np.ones((2, 2), dtype=bool)
     dilate = ndi.binary_dilation(input=pos_img, structure=struct)
@@ -916,29 +864,20 @@ def extract_class_avg(avg):
     return new_region
 
 
-def nearest_neighbors(complete_scores, num_class_avg, neighbors, metric):
+def nearest_neighbors(neighbors):
     """
     group k best scores for each class average to construct graph 
     """
-    order_scores = {avg: [] for avg in range(num_class_avg)}
-    
+    order_scores = {avg: [] for avg in range(num_class_avg)}   
     projection_knn = {}
 
-    #reorganize score matrix to sort for nearest neighbors
     #projection_knn[projection_1] = [projection_2, angle_1, angle_2, score]
-    for pair, values in complete_scores.items():
-        p1 = pair[0]
-        p2 = pair[1]
-        a1 = values[0]
-        a2 = values[1]
-        s = values[2]
+    for pair, values in complete_scores.items():        
+        p1, p2 = [p for p in pair]
+        a1, a2, s = [v for v in values]
         
-        #option: convert distance to similarity
-        #if metric != 'cross-correlation':
-        #    s = 1/(1 + values[2])
-        #else:
-        #    s = values[2]
-            
+        #s = 1/(1 + values[2]) #Option: convert distance to similarity
+         
         c = [p2, a1, a2, s]
         order_scores[p1].append(c)
         
@@ -956,39 +895,40 @@ def nearest_neighbors(complete_scores, num_class_avg, neighbors, metric):
             v[3] = zscore
 
     for avg, scores in order_scores.items():
-        if metric != 'cross-correlation':
-            sort = sorted(scores, reverse=False, key=lambda x: x[3])[:neighbors]
-        else:
-            sort = sorted(scores, reverse=True, key=lambda x: x[3])[:neighbors]
+        sort = sorted(scores, reverse=False, key=lambda x: x[3])[:neighbors]
         projection_knn[avg] = sort
         
     return projection_knn
 
 
-def remove_outliers(clusters, projection_2D):
+def remove_outliers(clusters):
     """
     use median absolute deviation of summed 2D projections to remove outliers
     inspect outliers for further processing
     """
-    pixel_sums = {}
-    
+    pixel_sums = {}   
     outliers = []
 
     for cluster, nodes in clusters.items():
-        pixel_sums[cluster] = []
-        for node in nodes:
-            pixel_sums[cluster].append(sum(sum(projection_2D[node])))
+        if len(nodes) > 1:
+            pixel_sums[cluster] = []
+            for node in nodes:
+                pixel_sums[cluster].append(sum(sum(extract_2D[node])))
 
     for cluster, psums in pixel_sums.items():
         med = np.median(psums)
         m_psums = [abs(x - med) for x in psums]
         mad = np.median(m_psums)
-
-        for i, proj in enumerate(psums):
-            #Boris Iglewicz and David Hoaglin (1993)
-            z = 0.6745*(proj - med)/mad
-            if abs(z) > 3.5:
-                outliers.append((cluster, clusters[cluster][i]))
+        
+        if mad == 0:
+            next
+            
+        else:
+            for i, proj in enumerate(psums):
+                #Boris Iglewicz and David Hoaglin (1993)
+                z = 0.6745*(proj - med)/mad
+                if abs(z) > 3.5:
+                    outliers.append((cluster, clusters[cluster][i]))
 
     clusters["outliers"] = [o[1] for o in outliers]
     
@@ -1001,6 +941,7 @@ def remove_outliers(clusters, projection_2D):
 
 def random_color():
     return tuple(np.random.rand(1,3)[0])
+
 
 def get_plot_colors(clusters, graph):
 
@@ -1030,6 +971,36 @@ def get_plot_colors(clusters, graph):
     return colors
 
 
+def make_equal_square_images(ref, comp): 
+    ry, rx = np.shape(ref)
+    cy, cx = np.shape(comp)
+
+    max_dim = max(rx, ry, cx, cy) # Max dimension
+    
+    ref = adjust_image_size(ref, max_dim)
+    comp = adjust_image_size(comp, max_dim)
+    
+    return ref, comp
+  
+    
+def adjust_image_size(img, max_dim):
+    y, x = np.shape(img)
+    
+    y_pad = int((max_dim-y)/2)
+    if y % 2 == 0:
+        img = np.pad(img, pad_width=((y_pad,y_pad), (0,0)), mode='constant')
+    else:
+        img = np.pad(img, pad_width=((y_pad+1,y_pad), (0,0)), mode='constant')
+
+    x_pad = int((max_dim-x)/2)
+    if x % 2 == 0:
+        img = np.pad(img, pad_width=((0,0), (x_pad,x_pad)), mode='constant')
+    else:
+        img = np.pad(img, pad_width=((0,0), (x_pad+1,x_pad)), mode='constant')
+    
+    return img
+
+
 class Projection:
     """for 1D projection vectors"""
     def __init__(self, 
@@ -1045,44 +1016,18 @@ class Projection:
         l = len(self.vector)
         return(l)
 
+    
 def make_1D(projection, angle):
     proj_1D = ski.transform.rotate(projection, angle, resize=True).sum(axis=0)
     trim_1D = np.trim_zeros(proj_1D, trim='fb')
     p = Projection(class_avg=projection, angle=angle, vector=trim_1D)
     return p
+  
     
 def pairwise_l2(a, b):
-    score = spatial.distance.euclidean(a.vector, b.vector)
+    score = euclidean(a.vector, b.vector)
     return score
 
-def pairwise_l1(a, b):
-    score = sum(abs(a.vector - b.vector))
-    return score
-
-def pairwise_cosine(a, b):
-    score = spatial.distance.cosine(a.vector, b.vector)
-    return score 
-
-def pairwise_xcorr(a, b):
-    score = signal.correlate(a.vector, b.vector, mode='valid')
-    score_max = np.amax(score)
-    
-    lp1 = a.size()
-    lp2 = b.size()
-    if lp1 < lp2 or lp1 == lp2:
-        shift = a
-        static = b
-    else:
-        shift = b
-        static = a
-    
-    loc = np.argwhere(score == np.amax(score))
-    #if multiple maximum occur pick the first
-    loc = loc[0]
-    
-    info = (static, shift, loc)
-    
-    return score_max, info
 
 def slide_score(a, b, pairwise_score):
     """
@@ -1096,7 +1041,7 @@ def slide_score(a, b, pairwise_score):
     
     if dol == 0:
         score = pairwise_score(a, b)
-        info = (a, b, np.array([0]))
+        info = (a, b, 0)
 
     else:
         projection_shifts = []
@@ -1110,9 +1055,13 @@ def slide_score(a, b, pairwise_score):
             
         for i in range(0, dol+1):
             v = np.pad(shift.vector, pad_width=(i, dol-i), mode='constant')
-            projection_shifts.append(Projection(class_avg = str(shift.class_avg)+'_'+str(i),
-                                                   angle = shift.angle,
-                                                   vector = v))
+            projection_shifts.append(
+                Projection(
+                    class_avg=str(shift.class_avg)+'_'+str(i),
+                    angle=shift.angle,
+                    vector=v
+                )
+            )
 
         scores = []
         for shifted in projection_shifts:
@@ -1120,7 +1069,7 @@ def slide_score(a, b, pairwise_score):
         score = min(scores)
         loc = np.argwhere(scores == np.amin(scores))
         #if multiple maximum occur pick the first
-        loc = loc[0]
+        loc = loc[0][0].astype('int')
         info = (static, shift, loc)
         
     return score, info
@@ -1134,13 +1083,15 @@ def parse_star(f):
     """
     return parse(f)
 
+
 def parse(f):
     lines = f.readlines()
     for i in range(len(lines)):
         line = lines[i]
         if line.startswith('data_'): 
             return parse_star_body(lines[i+1:])
-        
+       
+    
 def parse_star_body(lines):
     #data_images line has been read, next is loop
     for i in range(len(lines)):
@@ -1163,6 +1114,7 @@ def parse_star_body(lines):
     table = pd.DataFrame(content, columns=header)
     
     return table      
+    
     
 def parse_star_loop(lines):
     columns = []
