@@ -1,7 +1,7 @@
 # SLICEM
 Compare and cluster 2D class averages of multiple distinct structures from cryo-EM data based on common lines.  
 Example mrcs and star file provided in /data, corresponding cryo-EM data at EMPIAR-10268.  
-See **slicem_manual.pdf** for a brief tutorial.
+See **manual.pdf** for a brief tutorial.
 
 # New in 2020_Nov_6 update
 - Fixed memory error with multiprocessing  
@@ -23,7 +23,7 @@ source deactivate #to return to base env
 ```
 
 # Usage
-First generate a score file using SLICEM.py
+First generate a score file using slicem.py
 ```
 usage: slicem.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine,EMD}]
                  [-s SCALE_FACTOR] [-c NUM_WORKERS]
@@ -39,13 +39,13 @@ optional arguments:
   -m {Euclidean,L1,cosine,EMD}, --metric {Euclidean,L1,cosine,EMD}
                         choose scoring method, Euclidean default
   -s SCALE_FACTOR, --scale_factor SCALE_FACTOR
-                        scale factor for downsampling. (e.g. -s 2 converts 100pix --> 50pix box)
+                        scale factor for downsampling. (e.g. -s 2 converts 200pix --> 100pix box)
   -c NUM_WORKERS, --num_workers NUM_WORKERS
                         number of CPUs to use
 ```
 **command line example**
 ```
-(SLICEM): python slicem.py -i path/to/input.mrc -o path/to/output/ -s 4 -c 8
+(SLICEM): python slicem.py -i path/to/input.mrc -o path/to/output/ -c 8
 ```
 alternative example if running remotely
 ```
@@ -53,7 +53,7 @@ alternative example if running remotely
 ```
 
 <br/>
-Next load the scores and class averages into the GUI for clustering. See slicem_manual.pdf for more details
+Next load the scores and class averages into the GUI for clustering. See manual.pdf for more details
 
 ```
 python slicem_gui.py
