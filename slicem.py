@@ -103,9 +103,8 @@ class Projection:
 
     
 def get_projection_2D(mrcs, factor):
-    """
-    read, scale and extract class averages 
-    """
+    """read, scale and extract class averages"""
+    
     projection_2D = {}
 
     with mrcfile.open(mrcs) as mrc:
@@ -130,12 +129,7 @@ def get_projection_2D(mrcs, factor):
 
 
 def extract_class_avg(avg):
-    """
-    keep positive values from normalized class average
-    remove extra densities in class average
-    fit in minimal bounding box
-    """
-    #TODO: fix case where perimeter region can be closer to centroid
+    """fit in minimal bounding box"""
     
     image = avg.copy()
     image[image < 0] = 0
@@ -150,15 +144,18 @@ def extract_class_avg(avg):
         select_region = 0
 
     else:
-        img_x, img_y = image.shape
-        img_center = np.array((img_x/2, img_y/2))
+        img_y, img_x = image.shape
 
-        distances = [
-            (i, euclidean(img_center, np.array(r.weighted_centroid))) 
-            for i, r in enumerate(rprops)
-        ]
+        if labeled[int(img_y/2), int(img_x/2)] != 0: # Check for central region
+            select_region = labeled[int(img_y/2), int(img_x/2)] - 1 # For index
 
-        select_region = min(distances, key=lambda x: x[1])[0]    
+        else:
+            distances = [
+                (i, euclidean(np.array((img_y/2, img_x/2)), np.array(r.weighted_centroid))) 
+                for i, r in enumerate(rprops)
+            ]
+
+            select_region = min(distances, key=lambda x: x[1])[0] # Pick first closest region    
 
     y_min, x_min, y_max, x_max = [p for p in rprops[select_region].bbox]
 
@@ -253,9 +250,8 @@ def wrapper_slide_function(pair, pairwise):
 
 
 def wrapper_wasserstein(pair, pairwise):
-    """
-    same as above but without slide_score
-    """
+    """same as above but without slide_score"""
+    
     score = pairwise(pair[0], pair[1])
     
     return [pair[0].class_avg, pair[0].angle, pair[1].class_avg, pair[1].angle, score]

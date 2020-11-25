@@ -322,9 +322,8 @@ class SLICEM_GUI(tk.Tk):
     
     
     def load_class_avg(self, mrcs, factor):
-        """
-        read, scale and extract class averages 
-        """
+        """read, scale and extract class averages"""
+        
         projection_2D = {}
         extract_2D = {}
         
@@ -401,9 +400,8 @@ class SLICEM_GUI(tk.Tk):
         
         
     def create_network(self, community_detection, network_from, neighbors, top):
-        """
-        get new clusters depending on input options
-        """
+        """get new clusters depending on input options"""
+        
         if network_from == 'top_n':
             sort_by_scores = []
 
@@ -481,6 +479,7 @@ class SLICEM_GUI(tk.Tk):
         
     def plot_slicem_network(self, network_from, frame):
         #TODO: adjust k, scale for clearer visualization
+        
         if network_from == 'knn':
             positions = nx.spring_layout(G, weight='weight', k=0.3, scale=3.5)
         else:
@@ -510,9 +509,8 @@ class SLICEM_GUI(tk.Tk):
 
 
     def plot_tiles(self):
-        """
-        plot 2D class avgs sorted and colored by cluster
-        """
+        """plot 2D class avgs sorted and colored by cluster"""
+        
         #TODO: adjust plot, border and text_box sizes
         
         ordered_projections = []
@@ -667,9 +665,8 @@ class SLICEM_GUI(tk.Tk):
         
         
     def overlay_lines(self, p1, p2, frame):
-        """
-        overlays line projections at optimum angle between two class averages
-        """
+        """overlays line projections at optimum angle between two class averages"""
+        
         if p1 == p2:
             self.show_dif_class_msg()
         
@@ -734,9 +731,8 @@ class SLICEM_GUI(tk.Tk):
             
             
     def write_star_files(self, star_input, outpath):
-        """
-        split star file into new star files based on clusters
-        """
+        """split star file into new star files based on clusters"""
+        
         with open(star_input, 'r') as f:
             table = parse_star(f)
 
@@ -781,12 +777,7 @@ class SLICEM_GUI(tk.Tk):
         
 #utility functions from main script to make GUI standalone        
 def extract_class_avg(avg):
-    """
-    keep positive values from normalized class average
-    remove extra densities in class average
-    fit in minimal bounding box
-    """
-    #TODO: fix case where perimeter region can be closer to centroid
+    """fit in minimal bounding box"""
     
     image = avg.copy()
     image[image < 0] = 0
@@ -801,15 +792,18 @@ def extract_class_avg(avg):
         select_region = 0
 
     else:
-        img_x, img_y = image.shape
-        img_center = np.array((img_x/2, img_y/2))
+        img_y, img_x = image.shape
 
-        distances = [
-            (i, euclidean(img_center, np.array(r.weighted_centroid))) 
-            for i, r in enumerate(rprops)
-        ]
+        if labeled[int(img_y/2), int(img_x/2)] != 0: # Check for central region
+            select_region = labeled[int(img_y/2), int(img_x/2)] - 1 # For index
 
-        select_region = min(distances, key=lambda x: x[1])[0]    
+        else:
+            distances = [
+                (i, euclidean(np.array((img_y/2, img_x/2)), np.array(r.weighted_centroid))) 
+                for i, r in enumerate(rprops)
+            ]
+
+            select_region = min(distances, key=lambda x: x[1])[0] # Pick first closest region   
 
     y_min, x_min, y_max, x_max = [p for p in rprops[select_region].bbox]
 
@@ -819,9 +813,8 @@ def extract_class_avg(avg):
 
 
 def nearest_neighbors(neighbors):
-    """
-    group k best scores for each class average to construct graph 
-    """
+    """group k best scores for each class average to construct graph"""
+    
     order_scores = {avg: [] for avg in range(num_class_avg)}   
     projection_knn = {}
 
