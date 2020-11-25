@@ -786,82 +786,36 @@ def extract_class_avg(avg):
     remove extra densities in class average
     fit in minimal bounding box
     """
-    pos_img = avg.copy()
-    pos_img[pos_img < 0] = 0
+    #TODO: fix case where perimeter region can be closer to centroid
     
+    image = avg.copy()
+    image[image < 0] = 0
+
     struct = np.ones((2, 2), dtype=bool)
-    dilate = ndi.binary_dilation(input=pos_img, structure=struct)
+    dilate = ndi.binary_dilation(image, struct)
 
-    labeled = ski.measure.label(dilate, connectivity=2, background=False)
+    labeled = ski.measure.label(dilate, connectivity=2)
+    rprops = ski.measure.regionprops(labeled, image, cache=False)
 
-    #select a single region from each 2D class average
-    rprops = ski.measure.regionprops(labeled, cache=False)
-    bbox = [r.bbox for r in rprops]
+    if len(rprops) == 1:
+        select_region = 0
 
-    if len(bbox) == 1:
-        #use only region in the image
-        selected = 1
+    else:
+        img_x, img_y = image.shape
+        img_center = np.array((img_x/2, img_y/2))
 
-    elif len(bbox) > 1:
-        img_x_center = len(avg)/2
-        img_y_center = len(avg[:,0])/2
-        img_center = (img_x_center, img_y_center)
-        #for use in distance calculation
-        x1 = np.array(img_center)
+        distances = [
+            (i, euclidean(img_center, np.array(r.weighted_centroid))) 
+            for i, r in enumerate(rprops)
+        ]
 
-        box_range = {}
-        for i, box in enumerate(bbox):
-            width_coord = list(range(box[1], box[3]+1))
-            length_coord = list(range(box[0], box[2]+1))
-            box_range[i+1] = [width_coord, length_coord]
+        select_region = min(distances, key=lambda x: x[1])[0]    
 
-        box_centers = {}
-        for i, box in enumerate(bbox):
-            y_max, y_min = box[0], box[2]
-            x_max, x_min = box[1], box[3]
-            center_xy = (((x_max+x_min)/2, (y_max+y_min)/2))
-            #i+1 because 0 is the background region
-            box_centers[i+1] = center_xy
+    y_min, x_min, y_max, x_max = [p for p in rprops[select_region].bbox]
 
-        selected = 'none'
-
-        for region, bound in box_range.items():
-            #first check if there is a region in the center
-            if img_x_center in bound[0] and img_y_center in bound[1]:
-                #use center region
-                selected = region
-
-        if selected == 'none':
-            #find box closest to the center    
-            distance = {}
-            for region, center in box_centers.items():
-                x2 = np.array(center)
-                distance[region] = spatial.distance.euclidean(x1, x2)  
-            region = min(distance, key=distance.get) 
-            #use region closest to center
-            selected = region
-
-    selected_region = (labeled == selected)
-
-    properties = ski.measure.regionprops(selected_region.astype('int'))
-    bbox = properties[0].bbox
-
-    y_min, y_max = bbox[0], bbox[2]
-    x_min, x_max = bbox[1], bbox[3]
-
-    #keep only true pixels in bounding box
-    true_region = np.empty(avg.shape)
-
-    for i, row in enumerate(avg):
-        for j, pixel in enumerate(row):
-            if selected_region[(i,j)] == True:
-                true_region[(i,j)] = pos_img[(i, j)]
-            else:
-                true_region[(i,j)] = 0
-
-    new_region = true_region[y_min:y_max, x_min:x_max]
+    extract = image[y_min:y_max, x_min:x_max]
     
-    return new_region
+    return extract
 
 
 def nearest_neighbors(neighbors):
