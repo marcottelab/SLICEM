@@ -2,10 +2,10 @@ import os
 import mrcfile
 import numpy as np
 import pandas as pd
-import skimage as ski
 import networkx as nx
 from igraph import Graph
 from scipy import ndimage as ndi
+from skimage import transform, measure
 from scipy.spatial.distance import euclidean
 
 import tkinter as tk
@@ -339,7 +339,7 @@ class SLICEM_GUI(tk.Tk):
             if factor == 1:
                 extract_2D[k] = extract_class_avg(avg)
             else:
-                scaled_img = ski.transform.rescale(
+                scaled_img = transform.rescale(
                     avg, 
                     scale=(1/float(factor)), 
                     anti_aliasing=True, 
@@ -602,8 +602,8 @@ class SLICEM_GUI(tk.Tk):
             angle1 = complete_scores[p1, p2][0]
             angle2 = complete_scores[p1, p2][1]
 
-            ref = ski.transform.rotate(projection1, angle1, resize=True)
-            comp = ski.transform.rotate(projection2, angle2, resize=True)
+            ref = transform.rotate(projection1, angle1, resize=True)
+            comp = transform.rotate(projection2, angle2, resize=True)
 
             ref_square, comp_square = make_equal_square_images(ref, comp)
 
@@ -711,7 +711,8 @@ class SLICEM_GUI(tk.Tk):
             ax.set_ylabel('Intensity')
             ax.set_ylim([y_axis_min, (y_axis_max + 0.025*y_axis_max)])
 
-            ax.set_xticks(np.arange(0, x_axis_max, step=int((0.1*x_axis_max))))
+            if x_axis_max > 10:
+                ax.set_xticks(np.arange(0, x_axis_max, step=int((0.1*x_axis_max))))
             ax.set_xlim(0, x_axis_max)
             ax.set_xlabel('Pixel')
 
@@ -785,8 +786,8 @@ def extract_class_avg(avg):
     struct = np.ones((2, 2), dtype=bool)
     dilate = ndi.binary_dilation(image, struct)
 
-    labeled = ski.measure.label(dilate, connectivity=2)
-    rprops = ski.measure.regionprops(labeled, image, cache=False)
+    labeled = measure.label(dilate, connectivity=2)
+    rprops = measure.regionprops(labeled, image, cache=False)
 
     if len(rprops) == 1:
         select_region = 0
@@ -965,7 +966,7 @@ class Projection:
 
     
 def make_1D(projection, angle):
-    proj_1D = ski.transform.rotate(projection, angle, resize=True).sum(axis=0)
+    proj_1D = transform.rotate(projection, angle, resize=True).sum(axis=0)
     trim_1D = np.trim_zeros(proj_1D, trim='fb')
     p = Projection(class_avg=projection, angle=angle, vector=trim_1D)
     return p

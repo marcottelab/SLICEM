@@ -2,8 +2,8 @@ import time
 import mrcfile
 import argparse
 import numpy as np
-import skimage as ski
 import multiprocessing
+from skimage import transform, measure
 from scipy import ndimage as ndi
 from scipy.stats import wasserstein_distance
 from scipy.spatial.distance import euclidean, cosine
@@ -116,7 +116,7 @@ def get_projection_2D(mrcs, factor):
         if factor == 1:
             projection_2D[k] = extract_class_avg(avg)
         else:
-            scaled_img = ski.transform.rescale(
+            scaled_img = transform.rescale(
                 avg, 
                 scale=(1/factor), 
                 anti_aliasing=True, 
@@ -137,8 +137,8 @@ def extract_class_avg(avg):
     struct = np.ones((2, 2), dtype=bool)
     dilate = ndi.binary_dilation(image, struct)
 
-    labeled = ski.measure.label(dilate, connectivity=2)
-    rprops = ski.measure.regionprops(labeled, image, cache=False)
+    labeled = measure.label(dilate, connectivity=2)
+    rprops = measure.regionprops(labeled, image, cache=False)
 
     if len(rprops) == 1:
         select_region = 0
@@ -171,7 +171,7 @@ def vectorize(key, image):
     """
     projection_1D = {}
     for degree in ROTATION_DEGREES:
-        proj_1D = ski.transform.rotate(image, degree, resize=True).sum(axis=0)
+        proj_1D = transform.rotate(image, degree, resize=True).sum(axis=0)
         trim_1D = np.trim_zeros(proj_1D, trim='fb').astype('float32')
         projection_1D[(key, degree)] = Projection(class_avg=key, angle=degree, vector=trim_1D)
     return projection_1D
