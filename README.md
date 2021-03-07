@@ -5,7 +5,7 @@ See **manual.pdf** for a brief tutorial.
 
 # New in 2021_Mar_7 update
 - Default scoring now uses FT of projections, use `-d Real` for real space projections
-- GUI now includes option to remove nodes from the graph
+- GUI now includes option to remove nodes from the graph  
 ***upcoming updates***
 - Improved scoring and clustering
 - GPU support
