@@ -6,7 +6,6 @@ import networkx as nx
 from igraph import Graph
 from scipy import ndimage as ndi
 from skimage import transform, measure
-from scipy.spatial.distance import euclidean
 
 import tkinter as tk
 from tkinter import ttk
@@ -125,6 +124,13 @@ class SLICEM_GUI(tk.Tk):
         )
         self.community_wt.grid(row=0, column=1, padx=5, sticky=tk.W)
         
+#         wt_steps_label = ttk.Label(netbottomFrame, text='   steps: ')
+#         wt_steps_label.grid(row=0, column=2, sticky=tk.W)       
+
+        self.wt_steps = ttk.Entry(netbottomFrame, width=6)
+        self.wt_steps.insert(0, 4)
+#         self.wt_steps.grid(row=0, column=2, padx=50, sticky=tk.W)        
+        
         #EV: Errors w/ betweenness iGraph version, temporarily remove
         #self.community_eb = ttk.Radiobutton(
         #    netbottomFrame, 
@@ -160,13 +166,13 @@ class SLICEM_GUI(tk.Tk):
         knn_label.grid(row=1, column=2, sticky=tk.W)
         self.knn_entry = ttk.Entry(netbottomFrame, width=6)
         self.knn_entry.insert(0, 0)
-        self.knn_entry.grid(row=1, column=2, padx=50, sticky=tk.W)
+        self.knn_entry.grid(row=1, column=3, padx=5, sticky=tk.W)
         
         topn_label = ttk.Label(netbottomFrame, text='(# of n): ')
         topn_label.grid(row=2, column=2, sticky=tk.W)
         self.topn_entry = ttk.Entry(netbottomFrame, width=6)
         self.topn_entry.insert(0, 0)
-        self.topn_entry.grid(row=2, column=2, padx=50, sticky=tk.W)        
+        self.topn_entry.grid(row=2, column=3, padx=5, sticky=tk.W)        
         
         self.cluster = ttk.Button(
             netbottomFrame,
@@ -175,11 +181,13 @@ class SLICEM_GUI(tk.Tk):
             command=lambda: self.slicem_cluster(
                 self.detection.get(),
                 self.network.get(),
+                int(self.wt_steps.get()),
                 int(self.knn_entry.get()),
-                int(self.topn_entry.get())
+                int(self.topn_entry.get()),
+                self.drop_nodes.get()
             )
         )
-        self.cluster.grid(row=0, column=3, sticky=tk.W, padx=10, pady=2)        
+        self.cluster.grid(row=0, column=4, sticky=tk.W, padx=5, pady=2)        
         
         self.net_plot = ttk.Button(
             netbottomFrame,
@@ -189,7 +197,7 @@ class SLICEM_GUI(tk.Tk):
                 self.network.get(),
                 nettopFrame)
         )
-        self.net_plot.grid(row=1, column=3, sticky=tk.W, padx=10, pady=2)       
+        self.net_plot.grid(row=1, column=4, sticky=tk.W, padx=5, pady=2)       
         
         self.tiles = ttk.Button(
             netbottomFrame, 
@@ -197,7 +205,12 @@ class SLICEM_GUI(tk.Tk):
             text='plot 2D classes', 
             command=lambda: self.plot_tiles()
         )
-        self.tiles.grid(row=2, column=3, sticky=tk.W, padx=10, pady=2)
+        self.tiles.grid(row=2, column=4, sticky=tk.W, padx=5, pady=2)
+        
+        drop_label = ttk.Label(netbottomFrame, text='remove nodes')
+        drop_label.grid(row=0, column=5)
+        self.drop_nodes = ttk.Entry(netbottomFrame, width=15)
+        self.drop_nodes.grid(row=1, column=5, sticky=tk.W, padx=10)
         ############################################################################
 
         
@@ -248,10 +261,16 @@ class SLICEM_GUI(tk.Tk):
             command=lambda: self.overlay_lines(
                 int(self.avg1.get()),
                 int(self.avg2.get()),
+                self.ft_check_var.get(),
                 projtopFrame
             )
         )
         self.overlay_button.grid(row=0, column=5, padx=12)
+        
+        self.ft_check_var = tk.BooleanVar()
+        self.ft_check_var.set(0)
+        self.ft_check = ttk.Checkbutton(projbottomFrame, text='FT plot', variable=self.ft_check_var)
+        self.ft_check.grid(row=0, column=6, padx=12)
     ################################################################################     
 
     
@@ -324,6 +343,8 @@ class SLICEM_GUI(tk.Tk):
     def load_class_avg(self, mrcs, factor):
         """read, scale and extract class averages"""
         
+        global shape
+        
         projection_2D = {}
         extract_2D = {}
         
@@ -334,6 +355,8 @@ class SLICEM_GUI(tk.Tk):
             for i, data in enumerate(mrc.data):
                 projection_2D[i] = data
             mrc.close()
+            
+        shape = transform.rotate(projection_2D[0].copy(), 45, resize=True).shape[0]
 
         for k, avg in projection_2D.items():
             if factor == 1:
@@ -381,36 +404,56 @@ class SLICEM_GUI(tk.Tk):
        
     def show_cluster_fail(self):
         tk.messagebox.showwarning(None, 'Clustering failed.\nTry adjusting # of edges or switching methods')
+       
+    
+    def show_drop_list_msg(self):
+        tk.messagebox.showwarning(None, 'use comma separated list\nfor nodes to drop \ne.g. 1, 2, 3')
       
     
-    def slicem_cluster(self, community_detection, network_from, neighbors, top):
+    def slicem_cluster(self, community_detection, network_from, wt_steps, neighbors, top, drop_nodes):
+        """construct graph and get colors for plotting"""
+        #TODO: change to prevent cluster on exception
+        global scores_update, drop, flat, clusters, G, colors     
         
-        global flat, clusters, G, colors
-        
+        if len(drop_nodes) > 0:
+            try:
+                drop = [int(n) for n in drop_nodes.split(',')]
+                print('dropping nodes:', drop)
+                scores_update = {}
+                for pair, score in complete_scores.items():
+                    if pair[0] in drop or pair[1] in drop:
+                        next
+                    else:
+                        scores_update[pair] = score
+            except:
+                self.show_drop_list_msg()
+        else:
+            drop = []
+            scores_update = complete_scores
+
         flat, clusters, G = self.create_network(
             community_detection=community_detection, 
+            wt_steps=wt_steps,
             network_from=network_from, 
             neighbors=neighbors, 
             top=top
         )
-        
         colors = get_plot_colors(clusters, G)
+        print('clusters computed!')
+
         
-        print('clusters computed!')   
-        
-        
-    def create_network(self, community_detection, network_from, neighbors, top):
+    def create_network(self, community_detection, wt_steps, network_from, neighbors, top):
         """get new clusters depending on input options"""
         
         if network_from == 'top_n':
             sort_by_scores = []
 
-            for pair, score in complete_scores.items():
+            for pair, score in scores_update.items():
                 sort_by_scores.append([pair[0], pair[1], score[2]])
             top_n = sorted(sort_by_scores, reverse=False, key=lambda x: x[2])[:top]
 
-            #convert from distance to similarity
-            for score in top_n:
+            # Convert from distance to similarity for edge
+            for score in top_n: 
                 c = 1/(1 + score[2])
                 score[2] = c
 
@@ -422,15 +465,14 @@ class SLICEM_GUI(tk.Tk):
 
             for projection, knn in projection_knn.items():
                 for n in knn:
-                    #(proj_1, proj_2, score)
-                    flat.append((projection, n[0], abs(n[3])))
+                    flat.append((projection, n[0], abs(n[3])))  # p1, p2, score
 
         clusters = {}
         g = Graph.TupleList(flat, weights=True)
 
         if community_detection == 'walktrap':
             try:
-                wt = Graph.community_walktrap(g, weights='weight', steps=4)
+                wt = Graph.community_walktrap(g, weights='weight', steps=wt_steps)
                 cluster_dendrogram = wt.as_clustering()
             except:
                 self.show_cluster_fail()
@@ -455,12 +497,15 @@ class SLICEM_GUI(tk.Tk):
             for n in nodes:
                 clustered.append(n)
 
-        clusters['singles'] = [] #Add singles to clusters if not in top n scores
-
-        for node_key in projection_2D:
-            if node_key not in clustered:
-                clusters['singles'].append(node_key)
-
+        clusters['singles'] = [] # Add singles to clusters if not in top n scores
+        clusters['removed'] = []
+        
+        for node in projection_2D:
+            if node not in clustered and node not in drop:
+                clusters['singles'].append(node)
+            elif node in drop:
+                clusters['removed'].append(node)
+                
         G = nx.Graph()
 
         for pair in flat:
@@ -480,20 +525,30 @@ class SLICEM_GUI(tk.Tk):
     def plot_slicem_network(self, network_from, frame):
         #TODO: adjust k, scale for clearer visualization
         
+        G_subset = G.copy()
+        color_dict = {i: color for i, color in enumerate(colors)}
+        node_dict = {node: i for i, node in enumerate(G.nodes)}
+        
+        for d in drop:
+            G_subset.remove_node(d)
+            color_dict.pop(node_dict[d])
+        
+        color_subset = [color for k, color in color_dict.items()]
+        
         if network_from == 'knn':
-            positions = nx.spring_layout(G, weight='weight', k=0.3, scale=3.5)
+            positions = nx.spring_layout(G_subset, weight='weight', k=0.3, scale=3.5)
         else:
-            positions = nx.spring_layout(G, weight='weight', k=0.18, scale=1.5)
+            positions = nx.spring_layout(G_subset, weight='weight', k=0.18, scale=1.5)
             
         f = Figure(figsize=(8,5))
         a = f.add_subplot(111)
         
         a.axis('off')
 
-        nx.draw_networkx_nodes(G, positions, ax=a, edgecolors='black', linewidths=2, 
-                               node_size=300, alpha=0.65, node_color=colors)
-        nx.draw_networkx_edges(G, positions, ax=a, width=1, edge_color='grey')
-        nx.draw_networkx_labels(G, positions, ax=a, font_weight='bold', font_size=10)
+        nx.draw_networkx_nodes(G_subset, positions, ax=a, edgecolors='black', linewidths=2, 
+                               node_size=300, alpha=0.65, node_color=color_subset)
+        nx.draw_networkx_edges(G_subset, positions, ax=a, width=1, edge_color='grey')
+        nx.draw_networkx_labels(G_subset, positions, ax=a, font_weight='bold', font_size=10)
         
         if self.netcanvas:
             self.netcanvas.get_tk_widget().destroy()
@@ -664,71 +719,76 @@ class SLICEM_GUI(tk.Tk):
             self.projtoolbar.update()
         
         
-    def overlay_lines(self, p1, p2, frame):
+    def overlay_lines(self, p1, p2, FT, frame):
         """overlays line projections at optimum angle between two class averages"""
         
         if p1 == p2:
             self.show_dif_class_msg()
-        
+            
         else:
             a1 = complete_scores[p1, p2][0]
             a2 = complete_scores[p1, p2][1]
-
             projection1 = make_1D(extract_2D[p1], a1)
             projection2 = make_1D(extract_2D[p2], a2)
 
-            #get location where line projections have optimum overlap using L2
-            score, info = slide_score(projection1, projection2, pairwise_l2)
+            if FT:              
+                pad_p1 = np.pad(projection1.vector, pad_width=(0, shape-projection1.size()))
+                pad_p2 = np.pad(projection2.vector, pad_width=(0, shape-projection2.size()))
+                A = abs(np.fft.rfft(pad_p1))
+                B = abs(np.fft.rfft(pad_p2))
+                
+                f = Figure(figsize=(8,4))
+                ax = f.add_subplot(111)
 
-            loc = info[2]
+                ax.bar(range(len(A)), A, alpha=0.35, color='deepskyblue', ec='k', linewidth=1)
+                ax.bar(range(len(B)), B, alpha=0.35, color='yellow', ec='k', linewidth=1)
+                
+                ax.get_xaxis().set_ticks([])
+                ax.set_xlabel('frequency component')
+                ax.set_ylabel('Amplitude')
 
-            dol = abs(projection1.size() - projection2.size())
-
-            if projection1.size() >= projection2.size():
-                ref = info[0]
-                comp = info[1]
-                ref_intensity = ref.vector
-                comp_intensity = np.pad(comp.vector, pad_width=(loc, dol-loc), mode='constant')
             else:
-                ref = info[1]
-                comp = info[0]        
-                ref_intensity = np.pad(ref.vector, pad_width=(loc, dol-loc), mode='constant')    
-                comp_intensity = comp.vector
+                a2_flip = complete_scores[p1, p2][1] + 180
+                projection2_flip = make_1D(extract_2D[p2], a2_flip)
 
-            f = Figure(figsize=(4,4))
-            ax = f.add_subplot(111)
+                score_default, r, c = slide_score(projection1, projection2) # Score and location of optimum
+                score_flip, r_flip, c_flip = slide_score(projection1, projection2_flip) # Score of phase flipped
 
-            x_axis_max = max(len(ref_intensity), len(comp_intensity))
-            y_axis_max = max(np.amax(ref_intensity), np.amax(comp_intensity))
-            y_axis_min = min(np.amin(ref_intensity), np.amin(comp_intensity))
+                if score_default <= score_flip:
+                    ref_intensity, comp_intensity = r, c
+                else:
+                    ref_intensity, comp_intensity = r_flip, c_flip
 
-            ax.plot(ref_intensity, color='black')
-            ax.plot(comp_intensity, color='black')
+                f = Figure(figsize=(8,4))
+                ax = f.add_subplot(111)
 
-            ax.fill_between(range(len(ref_intensity)), ref_intensity, alpha=0.35, color='deepskyblue')
-            ax.fill_between(range(len(comp_intensity)), comp_intensity, alpha=0.35, color='yellow')
+                x_axis_max = len(ref_intensity)
+                y_axis_max = max(np.amax(ref_intensity), np.amax(comp_intensity))
+                y_axis_min = min(np.amin(ref_intensity), np.amin(comp_intensity))
 
-            ax.set_ylabel('Intensity')
-            ax.set_ylim([y_axis_min, (y_axis_max + 0.025*y_axis_max)])
+                ax.plot(ref_intensity, color='black')
+                ax.plot(comp_intensity, color='black')
 
-            if x_axis_max > 10:
-                ax.set_xticks(np.arange(0, x_axis_max, step=int((0.1*x_axis_max))))
-            ax.set_xlim(0, x_axis_max)
-            ax.set_xlabel('Pixel')
+                ax.fill_between(range(len(ref_intensity)), ref_intensity, alpha=0.35, color='deepskyblue')
+                ax.fill_between(range(len(comp_intensity)), comp_intensity, alpha=0.35, color='yellow')
 
-            f.tight_layout()
+                ax.set_ylabel('Intensity')
+                ax.set_ylim([y_axis_min, (y_axis_max + 0.025*y_axis_max)])
+                ax.xaxis.set_visible(False)
 
-            if self.projcanvas:
-                self.projcanvas.get_tk_widget().destroy()
-                self.projtoolbar.destroy()
+        f.tight_layout()
 
-            self.projcanvas = FigureCanvasTkAgg(f, frame)
-            self.projcanvas.draw()
-            self.projcanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-            self.projcanvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        if self.projcanvas:
+            self.projcanvas.get_tk_widget().destroy()
+            self.projtoolbar.destroy()
 
-            self.projtoolbar = NavigationToolbar2Tk(self.projcanvas, frame)
-            self.projtoolbar.update()
+        self.projcanvas = FigureCanvasTkAgg(f, frame)
+        self.projcanvas.draw()
+        self.projcanvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.projcanvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.projtoolbar = NavigationToolbar2Tk(self.projcanvas, frame)
+        self.projtoolbar.update()
             
             
     def write_star_files(self, star_input, outpath):
@@ -776,7 +836,8 @@ class SLICEM_GUI(tk.Tk):
         print('edge list written!')   
         
         
-#utility functions from main script to make GUI standalone        
+#Utility functions from main script to make GUI standalone        
+
 def extract_class_avg(avg):
     """fit in minimal bounding box"""
     
@@ -800,41 +861,36 @@ def extract_class_avg(avg):
 
         else:
             distances = [
-                (i, euclidean(np.array((img_y/2, img_x/2)), np.array(r.weighted_centroid))) 
+                (i, np.linalg.norm(np.array((img_y/2, img_x/2)) - np.array(r.weighted_centroid))) 
                 for i, r in enumerate(rprops)
             ]
 
-            select_region = min(distances, key=lambda x: x[1])[0] # Pick first closest region   
+            select_region = min(distances, key=lambda x: x[1])[0] # Pick first closest region    
 
     y_min, x_min, y_max, x_max = [p for p in rprops[select_region].bbox]
 
-    extract = image[y_min:y_max, x_min:x_max]
-    
-    return extract
+    return image[y_min:y_max, x_min:x_max]
 
 
 def nearest_neighbors(neighbors):
     """group k best scores for each class average to construct graph"""
     
-    order_scores = {avg: [] for avg in range(num_class_avg)}   
     projection_knn = {}
+    order_scores = {avg: [] for avg in range(num_class_avg)}   
+    
+    for d in drop:
+        order_scores.pop(d, None) 
 
     #projection_knn[projection_1] = [projection_2, angle_1, angle_2, score]
-    for pair, values in complete_scores.items():        
+    for pair, values in scores_update.items():        
         p1, p2 = [p for p in pair]
-        a1, a2, s = [v for v in values]
-        
-        #s = 1/(1 + values[2]) #Option: convert distance to similarity
-         
+        a1, a2, s = [v for v in values]         
         c = [p2, a1, a2, s]
         order_scores[p1].append(c)
         
-    #zscore scores by each projection, use as edgeweight in graph
+    # Zscore per class avg for edge
     for projection, scores in order_scores.items():
-        all_scores = []
-        for v in scores:
-            all_scores.append(v[3])
-        
+        all_scores = [v[3] for v in scores]
         u = np.mean(all_scores)
         s = np.std(all_scores)
     
@@ -851,8 +907,8 @@ def nearest_neighbors(neighbors):
 
 def remove_outliers(clusters):
     """
-    use median absolute deviation of summed 2D projections to remove outliers
-    inspect outliers for further processing
+    Use median absolute deviation to remove outliers
+    Boris Iglewicz and David Hoaglin (1993)
     """
     pixel_sums = {}   
     outliers = []
@@ -869,11 +925,9 @@ def remove_outliers(clusters):
         mad = np.median(m_psums)
         
         if mad == 0:
-            next
-            
+            next           
         else:
-            for i, proj in enumerate(psums):
-                #Boris Iglewicz and David Hoaglin (1993)
+            for i, proj in enumerate(psums):  
                 z = 0.6745*(proj - med)/mad
                 if abs(z) > 3.5:
                     outliers.append((cluster, clusters[cluster][i]))
@@ -881,8 +935,7 @@ def remove_outliers(clusters):
     clusters["outliers"] = [o[1] for o in outliers]
     
     for outlier in outliers:
-        cluster = outlier[0]
-        node = outlier[1]
+        cluster, node = outlier[0], outlier[1]
         clusters[cluster].remove(node)
         print('class_avg node {0} was removed from cluster {1} as an outlier'.format(node, cluster))
 
@@ -912,7 +965,10 @@ def get_plot_colors(clusters, graph):
                     colors.append((0.85, 0.85, 0.85))
             elif cluster == 'outliers':
                 if node in projections:
-                    colors.append((0.35, 0.35, 0.35))    
+                    colors.append((0.35, 0.35, 0.35))
+            elif cluster == 'removed':
+                if node in projections:
+                    colors.append((0.9, 0, 0))
             elif node in projections:
                 colors.append((color_list[cluster]))
                 
@@ -961,8 +1017,7 @@ class Projection:
         self.vector = vector
     
     def size(self):
-        l = len(self.vector)
-        return(l)
+        return len(self.vector)
 
     
 def make_1D(projection, angle):
@@ -972,55 +1027,53 @@ def make_1D(projection, angle):
     return p
   
     
-def pairwise_l2(a, b):
-    score = euclidean(a.vector, b.vector)
-    return score
-
-
-def slide_score(a, b, pairwise_score):
+def slide_score(a, b):
     """
+    finds minimum pairwise score for translations of 1D projections
     a, b are instances of the Projection class
-    finds minimum pairwise score for all translations
+    modified from main for plotting
     """
-    lp1 = a.size()
-    lp2 = b.size()
-    
-    dol = abs(lp1 - lp2)
-    
-    if dol == 0:
-        score = pairwise_score(a, b)
-        info = (a, b, 0)
+    scores = []
 
+    if a.size() > b.size():    
+        l, s = a.vector, b.vector
     else:
-        projection_shifts = []
-        
-        if lp1 > lp2:    
-            static = a
-            shift = b
-        else:
-            static = b
-            shift = a
-            
-        for i in range(0, dol+1):
-            v = np.pad(shift.vector, pad_width=(i, dol-i), mode='constant')
-            projection_shifts.append(
-                Projection(
-                    class_avg=str(shift.class_avg)+'_'+str(i),
-                    angle=shift.angle,
-                    vector=v
-                )
-            )
+        l, s = b.vector, a.vector
 
-        scores = []
-        for shifted in projection_shifts:
-            scores.append(pairwise_score(static, shifted))
-        score = min(scores)
-        loc = np.argwhere(scores == np.amin(scores))
-        #if multiple maximum occur pick the first
-        loc = loc[0][0].astype('int')
-        info = (static, shift, loc)
+    l_size, s_size = len(l), len(s)
+
+    pad_l = np.pad(l, pad_width=(s_size-1, s_size-1))
+    diff_of_len = abs(len(pad_l) - s_size)
+
+    for i in range(s_size+l_size-1):
+        shift_s = np.pad(s, pad_width=(i, diff_of_len-i))
+        scores.append(np.linalg.norm(pad_l - shift_s))
+
+    score = min(scores)
+    loc = np.argwhere(scores == np.amin(scores))
+    loc = loc[0][0].astype('int') # If multiple minimum occur pick the first
+
+    if a.size() > b.size():    
+        ref_intensity = pad_l
+        comp_intensity = np.pad(s, pad_width=(loc, diff_of_len-loc))
+    else:
+        ref_intensity = np.pad(s, pad_width=(loc, diff_of_len-loc))
+        comp_intensity = pad_l
+
+    #Crop lines for plotting  
+    if loc < s_size-1:
+        ref_intensity = ref_intensity[loc:s_size-1+l_size]
+        comp_intensity = comp_intensity[loc:s_size-1+l_size]
+
+    elif loc >= s_size-1 and loc+s_size < s_size-1+l_size:
+        ref_intensity = ref_intensity[s_size-1:s_size+l_size]
+        comp_intensity = comp_intensity[s_size-1:s_size+l_size]
+
+    elif loc >= s_size-1 and loc+s_size >= s_size-1+l_size:
+        ref_intensity = ref_intensity[s_size-1:loc+s_size]
+        comp_intensity = comp_intensity[s_size-1:loc+s_size]
         
-    return score, info
+    return score, ref_intensity, comp_intensity
 
 
 def parse_star(f):
