@@ -3,15 +3,18 @@ Compare and cluster 2D class averages of multiple distinct structures from cryo-
 Example mrcs and star file provided in /data, corresponding cryo-EM data at EMPIAR-10268.  
 See **manual.pdf** for a brief tutorial.
 
+# New in 2021_Mar_7 update
+- Default scoring now uses FT of projections, use `-d Real` for real space projections
+- GUI now includes option to remove nodes from the graph
+***upcoming updates***
+- Improved scoring and clustering
+- GPU support
+
 # New in 2020_Nov_6 update
 - Fixed memory error with multiprocessing  
 - Added option to downscale class averages `-s` (--> faster processing)  
 - Added Wasserstein (Earth mover) distance
-- Removed support for normalization and cross-correlation  
 - Removed Jupyter Notebook (out of date)  
-***upcoming updates***
-- GPU support
-- Improved GUI
 
 # Installation
 Download the software and create a conda environment -
@@ -25,8 +28,10 @@ source deactivate #to return to base env
 # Usage
 First generate a score file using slicem.py
 ```
-usage: slicem.py [-h] -i MRC_INPUT -o OUTPATH [-m {Euclidean,L1,cosine,EMD}]
-                 [-s SCALE_FACTOR] [-c NUM_WORKERS]
+usage: SLICEM_DEV.py [-h] -i MRC_INPUT -o OUTPATH
+                     [-m {Euclidean,L1,cosine,EMD,correlate}]
+                     [-s SCALE_FACTOR] [-c NUM_WORKERS] [-d {Fourier,Real}]
+                     [-t {full,valid}] [-a ANGULAR_SAMPLING]
 
 compare similarity of 2D class averages based on common lines
 
@@ -36,12 +41,18 @@ optional arguments:
                         path to mrcs file of 2D class averages
   -o OUTPATH, --outpath OUTPATH
                         path for output files
-  -m {Euclidean,L1,cosine,EMD}, --metric {Euclidean,L1,cosine,EMD}
-                        choose scoring method, Euclidean default
+  -m {Euclidean,L1,cosine,EMD,correlate}, --metric {Euclidean,L1,cosine,EMD,correlate}
+                        choose scoring method, default Euclidean
   -s SCALE_FACTOR, --scale_factor SCALE_FACTOR
-                        scale factor for downsampling. (e.g. -s 2 converts 200pix --> 100pix box)
+                        scale factor for downsampling. (e.g. -s 2 converts 200pix box --> 100pix box)
   -c NUM_WORKERS, --num_workers NUM_WORKERS
-                        number of CPUs to use
+                        number of CPUs to use, default 1
+  -d {Fourier,Real}, --domain {Fourier,Real}
+                        Fourier or Real space, default Fourier
+  -t {full,valid}, --translate {full,valid}
+                        indicate size of score vector, numpy convention, default full
+  -a ANGULAR_SAMPLING, --angular_sampling ANGULAR_SAMPLING
+                        angle sampling for 1D projections in degrees, default 5
 ```
 **command line example**
 ```
