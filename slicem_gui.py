@@ -113,7 +113,7 @@ class SLICEM_GUI(tk.Tk):
         self.detection = tk.StringVar(network_tab)
         self.detection.set('walktrap')
 
-        comm_label = ttk.Label(netbottomFrame, text='community detection algorithm: ')
+        comm_label = ttk.Label(netbottomFrame, text='community detection:')
         comm_label.grid(row=0, column=0, sticky=tk.E)        
 
         self.community_wt = ttk.Radiobutton(
@@ -124,8 +124,11 @@ class SLICEM_GUI(tk.Tk):
         )
         self.community_wt.grid(row=0, column=1, padx=5, sticky=tk.W)
         
-#         wt_steps_label = ttk.Label(netbottomFrame, text='   steps: ')
-#         wt_steps_label.grid(row=0, column=2, sticky=tk.W)       
+        n_clusters_label = ttk.Label(netbottomFrame, text='# of clusters (optional):')
+        n_clusters_label.grid(row=0, column=2, sticky=tk.E)
+        
+        self.n_clust = ttk.Entry(netbottomFrame, width=6)
+        self.n_clust.grid(row=0, column=3, padx=5, sticky=tk.W)
 
         self.wt_steps = ttk.Entry(netbottomFrame, width=6)
         self.wt_steps.insert(0, 4)
@@ -143,7 +146,7 @@ class SLICEM_GUI(tk.Tk):
         self.network = tk.StringVar(network_tab)
         self.network.set('knn')
         
-        net_label = ttk.Label(netbottomFrame, text='construct network from: ')
+        net_label = ttk.Label(netbottomFrame, text='construct network from:')
         net_label.grid(row=1, column=0, sticky=tk.E)
         
         self.net1 = ttk.Radiobutton(
@@ -162,14 +165,14 @@ class SLICEM_GUI(tk.Tk):
         )
         self.net2.grid(row=2, column=1, padx=5, sticky=tk.W)
 
-        knn_label = ttk.Label(netbottomFrame, text='(# of k): ')
-        knn_label.grid(row=1, column=2, sticky=tk.W)
+        knn_label = ttk.Label(netbottomFrame, text='# of k:')
+        knn_label.grid(row=1, column=2, sticky=tk.E)
         self.knn_entry = ttk.Entry(netbottomFrame, width=6)
         self.knn_entry.insert(0, 0)
         self.knn_entry.grid(row=1, column=3, padx=5, sticky=tk.W)
         
-        topn_label = ttk.Label(netbottomFrame, text='(# of n): ')
-        topn_label.grid(row=2, column=2, sticky=tk.W)
+        topn_label = ttk.Label(netbottomFrame, text='# of n:')
+        topn_label.grid(row=2, column=2, sticky=tk.E)
         self.topn_entry = ttk.Entry(netbottomFrame, width=6)
         self.topn_entry.insert(0, 0)
         self.topn_entry.grid(row=2, column=3, padx=5, sticky=tk.W)        
@@ -182,6 +185,7 @@ class SLICEM_GUI(tk.Tk):
                 self.detection.get(),
                 self.network.get(),
                 int(self.wt_steps.get()),
+                self.n_clust.get(),
                 int(self.knn_entry.get()),
                 int(self.topn_entry.get()),
                 self.drop_nodes.get()
@@ -403,17 +407,22 @@ class SLICEM_GUI(tk.Tk):
         
        
     def show_cluster_fail(self):
-        tk.messagebox.showwarning(None, 'Clustering failed.\nTry adjusting # of edges or switching methods')
+        tk.messagebox.showwarning(None, 'Clustering failed.\nTry adjusting # of clusters\n or # of edges')
        
     
     def show_drop_list_msg(self):
         tk.messagebox.showwarning(None, 'use comma separated list\nfor nodes to drop \ne.g. 1, 2, 3')
       
     
-    def slicem_cluster(self, community_detection, network_from, wt_steps, neighbors, top, drop_nodes):
+    def slicem_cluster(self, community_detection, network_from, wt_steps, n_clust, neighbors, top, drop_nodes):
         """construct graph and get colors for plotting"""
         #TODO: change to prevent cluster on exception
         global scores_update, drop, flat, clusters, G, colors     
+        
+        if len(n_clust) == 0:
+            n_clust = None # Cluster at optimum modularity
+        else:
+            n_clust = int(n_clust)
         
         if len(drop_nodes) > 0:
             try:
@@ -434,6 +443,7 @@ class SLICEM_GUI(tk.Tk):
         flat, clusters, G = self.create_network(
             community_detection=community_detection, 
             wt_steps=wt_steps,
+            n_clust=n_clust,
             network_from=network_from, 
             neighbors=neighbors, 
             top=top
@@ -442,7 +452,7 @@ class SLICEM_GUI(tk.Tk):
         print('clusters computed!')
 
         
-    def create_network(self, community_detection, wt_steps, network_from, neighbors, top):
+    def create_network(self, community_detection, wt_steps, n_clust, network_from, neighbors, top):
         """get new clusters depending on input options"""
         
         if network_from == 'top_n':
@@ -473,13 +483,13 @@ class SLICEM_GUI(tk.Tk):
         if community_detection == 'walktrap':
             try:
                 wt = Graph.community_walktrap(g, weights='weight', steps=wt_steps)
-                cluster_dendrogram = wt.as_clustering()
+                cluster_dendrogram = wt.as_clustering(n_clust)
             except:
                 self.show_cluster_fail()
         elif community_detection == 'betweenness':
             try:
                 ebs = Graph.community_edge_betweenness(g, weights='weight', directed=True)
-                cluster_dendrogram = ebs.as_clustering()
+                cluster_dendrogram = ebs.as_clustering(n_clust)
             except:
                 self.show_cluster_fail()
 
@@ -1139,5 +1149,5 @@ def parse_star_loop(lines):
 
 
 app = SLICEM_GUI()
-app.geometry('900x700')
+app.geometry('900x750')
 app.mainloop()
