@@ -5,7 +5,7 @@ See **manual.pdf** for a brief tutorial.
 
 # New in 2021_Mar_7 update
 - Default scoring now uses FT of projections, use `-d Real` for real space projections
-- GUI now includes option to remove nodes from the graph  
+- GUI now includes option to remove nodes from the graph and input desired # of clusters  
 ***upcoming updates***
 - Improved scoring and clustering
 - GPU support
@@ -21,7 +21,7 @@ Download the software and create a conda environment -
 ```
 git clone https://github.com/marcottelab/SLICEM.git
 conda env create -f environment.yml
-source activate SLICEM 
+conda activate SLICEM 
 source deactivate #to return to base env
 ```
 
